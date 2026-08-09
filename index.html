@@ -1,0 +1,1317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoNews Map</title>
+
+    <!-- Newspaper SVG Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📰</text></svg>">
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+
+    <!-- noUiSlider CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css" />
+
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+        body { display: flex; flex-direction: column; height: 100vh; overflow: hidden; background: #0f172a; }
+
+        /* Header Bar */
+        header {
+            padding: 10px 16px;
+            background: #1e293b;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            z-index: 1000;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            min-height: 64px;
+        }
+
+        .header-brand { display: flex; align-items: center; gap: 6px; font-weight: bold; font-size: 18px; flex-shrink: 0; }
+        .controls-group { display: flex; gap: 8px; flex-shrink: 0; }
+
+        .category-select, .search-box input {
+            padding: 6px 10px;
+            border-radius: 4px;
+            border: 1px solid #334155;
+            background: #0f172a;
+            color: white;
+            font-size: 13px;
+        }
+
+        .search-box { display: flex; gap: 4px; width: 220px; }
+        .search-box input { flex: 1; min-width: 0; }
+        .search-box button {
+            padding: 6px 10px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+
+        .timeline-container { 
+            display: flex; 
+            align-items: center; 
+            gap: 10px; 
+            font-size: 13px; 
+            background: #0f172a; 
+            padding: 6px 12px; 
+            border-radius: 6px; 
+            border: 1px solid #334155;
+            width: 540px;
+            flex-shrink: 0;
+        }
+
+        /* Preset Buttons styling */
+        .preset-group { display: flex; gap: 4px; flex-shrink: 0; }
+        .btn-preset {
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #94a3b8;
+            padding: 4px 7px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .btn-preset:hover, .btn-preset.active {
+            background: #3b82f6;
+            color: #ffffff;
+            border-color: #3b82f6;
+        }
+
+        .slider-wrapper { flex: 1; padding: 0 4px; }
+
+        /* noUiSlider Styling */
+        .noUi-target { background: #334155; border: none; height: 6px; border-radius: 3px; }
+        .noUi-connect { background: #3b82f6; }
+        .noUi-handle {
+            border: 2px solid #3b82f6;
+            border-radius: 50%;
+            background: #ffffff;
+            cursor: pointer;
+            width: 16px !important;
+            height: 16px !important;
+            right: -8px !important;
+            top: -5px !important;
+        }
+        .noUi-handle:before, .noUi-handle:after { display: none; }
+
+        @media (min-width: 851px) {
+            .noUi-handle {
+                width: 20px !important;
+                height: 20px !important;
+                right: -10px !important;
+                top: -7px !important;
+            }
+        }
+
+        .date-pickers { display: flex; align-items: center; gap: 4px; }
+        .date-pickers input[type="date"] {
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: white;
+            padding: 3px 4px;
+            border-radius: 4px;
+            font-size: 11px;
+            width: 105px;
+        }
+
+        .auth-bar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-shrink: 0; }
+        .auth-bar button { padding: 6px 12px; border-radius: 4px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+        .btn-login { background: #3b82f6; color: white; }
+        .btn-logout { background: #ef4444; color: white; }
+        .user-badge { color: #94a3b8; font-size: 12px; display: flex; align-items: center; gap: 4px; }
+
+        /* Main Workspace & Sidebar */
+        .main-wrapper {
+            position: relative;
+            flex: 1;
+            display: flex;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        #map { flex: 1; height: 100%; width: 100%; }
+
+        .sidebar {
+            width: 320px;
+            background: #1e293b;
+            border-left: 1px solid #334155;
+            display: flex;
+            flex-direction: column;
+            transition: margin-right 0.3s ease;
+            z-index: 900;
+            color: #fff;
+        }
+        .sidebar.collapsed { margin-right: -320px; }
+
+        .sidebar-header {
+            padding: 12px 16px;
+            background: #0f172a;
+            border-bottom: 1px solid #334155;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .sidebar-toggle-btn {
+            position: absolute;
+            right: 320px;
+            top: 15px;
+            background: #1e293b;
+            color: white;
+            border: 1px solid #334155;
+            border-right: none;
+            padding: 8px 10px;
+            border-radius: 6px 0 0 6px;
+            cursor: pointer;
+            z-index: 901;
+            transition: right 0.3s ease;
+            box-shadow: -2px 0 6px rgba(0,0,0,0.2);
+            font-size: 12px;
+        }
+
+        .sidebar.collapsed + .sidebar-toggle-btn,
+        .main-wrapper.sidebar-closed .sidebar-toggle-btn { right: 0; }
+
+        .sidebar-feed {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .feed-item {
+            background: #0f172a;
+            border: 1px solid #334155;
+            padding: 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.15s ease, border-color 0.15s ease;
+        }
+        .feed-item:hover { background: #1e293b; border-color: #3b82f6; }
+
+        .feed-item-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #94a3b8;
+            margin-bottom: 4px;
+        }
+
+        .feed-item-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #f8fafc;
+            line-height: 1.3;
+        }
+
+        /* Marker & Card Popup Styling */
+        .emoji-marker { font-size: 26px; text-align: center; line-height: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4)); cursor: pointer; }
+        .leaflet-popup-content-wrapper { border-radius: 8px; padding: 4px; background: #ffffff; }
+        .article-card { max-width: 270px; font-size: 13px; line-height: 1.4; }
+        .article-card img { width: 100%; height: 120px; object-fit: cover; border-radius: 4px; margin-top: 6px; }
+        .article-card h4 { margin-bottom: 4px; color: #0f172a; font-size: 14px; }
+        .article-card p { color: #475569; margin-bottom: 8px; }
+        .article-card .meta { font-size: 11px; color: #94a3b8; display: flex; justify-content: space-between; margin-bottom: 4px; }
+        .article-card a { color: #2563eb; font-weight: bold; text-decoration: none; display: inline-block; margin-top: 2px; }
+
+        /* Casualty Badges */
+        .casualty-badges { display: flex; gap: 8px; margin: 6px 0; font-weight: 700; font-size: 11px; }
+        .badge-injured { background: #fef3c7; color: #d97706; padding: 3px 8px; border-radius: 4px; border: 1px solid #fde68a; }
+        .badge-killed { background: #fee2e2; color: #dc2626; padding: 3px 8px; border-radius: 4px; border: 1px solid #fca5a5; }
+
+        /* Timeline Section */
+        .timeline-section { margin-top: 10px; border-top: 1px dashed #cbd5e1; padding-top: 8px; }
+        .timeline-header { font-weight: bold; font-size: 11px; color: #334155; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+        .timeline-list { list-style: none; padding: 0; margin: 0; max-height: 120px; overflow-y: auto; }
+        .timeline-item { font-size: 11px; margin-bottom: 6px; padding-left: 8px; border-left: 2px solid #3b82f6; }
+        .timeline-item-date { color: #94a3b8; font-size: 10px; }
+
+        .card-actions { display: flex; gap: 8px; margin-top: 10px; border-top: 1px solid #e2e8f0; padding-top: 6px; flex-wrap: wrap; }
+        .btn-action { background: none; border: none; font-size: 11px; cursor: pointer; text-decoration: underline; }
+        .btn-direct-link { color: #059669; }
+        .btn-add-update { color: #16a34a; font-weight: 600; }
+        .btn-edit { color: #2563eb; }
+        .btn-delete { color: #dc2626; }
+
+        /* Modal styling */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center;
+            z-index: 2000; backdrop-filter: blur(2px);
+        }
+        .modal { background: white; padding: 24px; border-radius: 12px; width: 480px; max-width: 95%; box-shadow: 0 10px 25px rgba(0,0,0,0.3); max-height: 90vh; overflow-y: auto; }
+        .modal h3 { margin-bottom: 12px; color: #0f172a; }
+        .modal label { font-size: 12px; font-weight: 700; color: #334155; display: block; margin-top: 10px; }
+        .modal input, .modal textarea { width: 100%; padding: 8px 10px; margin-top: 4px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; }
+        
+        .emoji-grid { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; max-height: 140px; overflow-y: auto; padding: 4px; border: 1px solid #f1f5f9; border-radius: 6px; }
+        .emoji-btn { font-size: 20px; padding: 6px 8px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; }
+        .emoji-btn.active { background: #dbeafe; border-color: #2563eb; }
+        .category-name-badge { font-size: 12px; color: #2563eb; font-weight: 600; margin-top: 4px; }
+
+        /* Diff Box Styles */
+        .diff-review-box { display: none; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 8px; padding: 14px; margin-bottom: 14px; }
+        .diff-header { font-weight: bold; color: #0f172a; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #cbd5e1; padding-bottom: 6px; }
+        .diff-container { display: flex; flex-direction: column; gap: 8px; }
+        .diff-row { padding: 8px; background: #ffffff; border-radius: 6px; border: 1px solid #e2e8f0; position: relative; }
+        .diff-field-label { font-weight: 700; color: #334155; margin-bottom: 4px; font-size: 12px; }
+        .diff-old { color: #dc2626; text-decoration: line-through; margin-bottom: 2px; font-size: 11px; }
+        .diff-new { color: #16a34a; font-weight: 600; font-size: 12px; }
+        .btn-rollback { position: absolute; top: 8px; right: 8px; background: #cbd5e1; border: none; padding: 3px 6px; border-radius: 4px; font-size: 10px; color: #475569; cursor: pointer; font-weight: bold; }
+        .btn-rollback:hover { background: #94a3b8; color: #0f172a; }
+        .btn-rollback.active { background: #dc2626; color: white; }
+
+        .modal-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+        .btn-cancel { background: #94a3b8; color: white; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; }
+        .btn-submit { background: #16a34a; color: white; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+
+        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
+        @media (max-width: 850px) {
+            header { flex-direction: column; align-items: stretch; height: auto; padding: 10px 12px; gap: 8px; }
+            .header-top-row { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+            .controls-group { width: 100%; justify-content: space-between; gap: 6px; }
+            .category-select { flex: 1; max-width: 49%; font-size: 12px; }
+            .search-box { flex: 1; max-width: 49%; }
+            .search-box input { font-size: 12px; padding: 5px 8px; }
+            .search-box button { padding: 5px 8px; font-size: 12px; }
+
+            .timeline-container { width: 100%; flex-direction: column; gap: 8px; padding: 8px; }
+            .preset-group { width: 100%; justify-content: space-between; }
+            .btn-preset { flex: 1; text-align: center; }
+            .slider-wrapper { width: 100%; padding: 4px 6px; }
+            .date-pickers { width: 100%; justify-content: space-between; }
+            .date-pickers input[type="date"] { flex: 1; width: 45%; font-size: 11px; padding: 4px; }
+
+            .sidebar, .sidebar-toggle-btn { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-top-row">
+            <div class="header-brand">📰 GeoNews</div>
+            <div class="auth-bar" id="authBar"></div>
+        </div>
+
+        <div class="controls-group">
+            <label for="categoryFilter" class="sr-only">Filter by Category</label>
+            <select id="categoryFilter" class="category-select" onchange="handleCategoryFilterChange()">
+                <option value="ALL" data-slug="all">All Categories</option>
+                <option value="📰" data-slug="general">📰 General News</option>
+                <option value="🔴" data-slug="breaking">🔴 Breaking News</option>
+                <option value="💥" data-slug="collisions">💥 Collisions & Accidents</option>
+                <option value="⛰️" data-slug="landslides">⛰️ Rockslides & Landslides</option>
+                <option value="🔥" data-slug="fires">🔥 Fires & Wildfires</option>
+                <option value="⚠️" data-slug="hazards">⚠️ General Hazard & Warning</option>
+                <option value="💨" data-slug="winds">💨 High Winds & Gales</option>
+                <option value="🌪️" data-slug="tornadoes">🌪️ Tornadoes & Severe Storms</option>
+                <option value="🌩️" data-slug="thunderstorms">🌩️ Severe Thunderstorm</option>
+                <option value="❄️" data-slug="blizzards">❄️ Extreme Cold & Blizzards</option>
+                <option value="🌊" data-slug="floods">🌊 Floods & Waves</option>
+                <option value="☀️" data-slug="heatwaves">☀️ Extreme Heatwave</option>
+                <option value="🌋" data-slug="volcanic">🌋 Volcanic Activity</option>
+                <option value="🛸" data-slug="drones">🛸 Drone Sightings & UAV</option>
+                <option value="🎖️" data-slug="military">🎖️ Military Operations</option>
+                <option value="🚀" data-slug="missiles">🚀 Missile & Air Activity</option>
+                <option value="⚔️" data-slug="conflict">⚔️ Conflict & Defense</option>
+                <option value="💻" data-slug="cyber">💻 Cyberattacks & IT Outages</option>
+                <option value="📢" data-slug="protests">📢 Protests & Rallies</option>
+                <option value="📜" data-slug="politics">📜 Politics</option>
+                <option value="⚽" data-slug="sports">⚽ Sports</option>
+                <option value="💼" data-slug="tech-business">💼 Tech & Business</option>
+                <option value="💰" data-slug="finance">💰 Finance & Economy</option>
+                <option value="🏥" data-slug="health">🏥 Public Health</option>
+                <option value="⚡" data-slug="energy">⚡ Energy & Power</option>
+                <option value="🚌" data-slug="transport">🚌 Public Transport & Travel</option>
+                <option value="🚢" data-slug="maritime">🚢 Maritime & Shipping</option>
+                <option value="🏗️" data-slug="infrastructure">🏗️ Infrastructure & Construction</option>
+                <option value="🎓" data-slug="science">🎓 Education & Science</option>
+                <option value="🐾" data-slug="wildlife">🐾 Wildlife & Environment</option>
+                <option value="🎨" data-slug="culture">🎨 Culture & Arts</option>
+                <option value="⚖️" data-slug="crime">⚖️ Crime & Legal</option>
+            </select>
+
+            <form class="search-box" onsubmit="event.preventDefault(); searchLocation();">
+                <label for="searchInput" class="sr-only">Search address or street</label>
+                <input type="text" id="searchInput" placeholder="Search address or street...">
+                <button type="submit">Search</button>
+            </form>
+        </div>
+
+        <div class="timeline-container">
+            <div class="preset-group">
+                <button type="button" class="btn-preset" onclick="applyPreset(7, event)">7D</button>
+                <button type="button" class="btn-preset" onclick="applyPreset(30, event)">1M</button>
+                <button type="button" class="btn-preset" onclick="applyPreset(180, event)">6M</button>
+                <button type="button" class="btn-preset active" onclick="applyPreset(365, event)">1Y</button>
+                <button type="button" class="btn-preset" onclick="applyPreset(3650, event)">ALL</button>
+            </div>
+
+            <div class="slider-wrapper">
+                <div id="dualDateSlider"></div>
+            </div>
+
+            <div class="date-pickers">
+                <label for="startDate" class="sr-only">Start Date</label>
+                <input type="date" id="startDate" onchange="syncInputToSlider()">
+                <span style="color: #64748b;" aria-hidden="true">-</span>
+                <label for="endDate" class="sr-only">End Date</label>
+                <input type="date" id="endDate" onchange="syncInputToSlider()">
+            </div>
+        </div>
+    </header>
+
+    <div class="main-wrapper" id="mainWrapper">
+        <div id="map"></div>
+
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <span>Recent Incidents (<span id="feedCount">0</span>)</span>
+            </div>
+            <div class="sidebar-feed" id="sidebarFeed"></div>
+        </div>
+
+        <button class="sidebar-toggle-btn" id="sidebarToggleBtn" onclick="toggleSidebar()">▶</button>
+    </div>
+
+    <!-- ADD / EDIT MASTER ARTICLE MODAL -->
+    <div class="modal-overlay" id="articleModal">
+        <div class="modal">
+            <h3 id="modalTitle">Add News Article</h3>
+            
+            <div class="diff-review-box" id="diffReviewBox">
+                <div class="diff-header">
+                    <span>🔍 Review Live Updates</span>
+                    <span style="font-size: 10px; color: #64748b; font-weight: normal;">Compare stored vs. scraped data. Use rollback buttons to keep old data.</span>
+                </div>
+                <div class="diff-container" id="diffContainer"></div>
+            </div>
+
+            <label for="articleUrl">Article URL</label>
+            <input type="url" id="articleUrl" placeholder="Paste link here..." onchange="fetchMetadata(this.value)">
+
+            <!-- COORDINATES DISPLAY & SUGGESTED LOCATION -->
+            <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px; margin-top: 10px; font-size: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-weight: bold; color: #334155;">📍 Pin Location:</span>
+                    <span id="coordDisplay" style="font-family: monospace; color: #2563eb; font-weight: bold;">0.0000, 0.0000</span>
+                </div>
+                
+                <div id="suggestedLocBox" style="display: none; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #cbd5e1;">
+                    <span style="color: #475569;">Detected Place in Text: <strong id="detectedPlaceName" style="color: #0f172a;">-</strong></span>
+                    <button type="button" id="btnUseSuggestedLoc" onclick="useSuggestedLocation()" style="display: block; width: 100%; margin-top: 6px; background: #3b82f6; color: white; border: none; padding: 6px; border-radius: 4px; font-size: 11px; cursor: pointer; font-weight: bold;">
+                        🎯 Move Pin to Suggested Location
+                    </button>
+                </div>
+            </div>
+
+            <label id="categoryGridLabel">Category & Emoji Marker</label>
+            <div class="emoji-grid" role="group" aria-labelledby="categoryGridLabel">
+                <button type="button" class="emoji-btn active" onclick="selectEmoji('general', this)">📰</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('breaking', this)">🔴</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('collisions', this)">💥</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('landslides', this)">⛰️</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('fires', this)">🔥</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('hazards', this)">⚠️</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('winds', this)">💨</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('tornadoes', this)">🌪️</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('thunderstorms', this)">🌩️</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('blizzards', this)">❄️</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('floods', this)">🌊</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('heatwaves', this)">☀️</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('volcanic', this)">🌋</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('drones', this)">🛸</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('military', this)">🎖️</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('missiles', this)">🚀</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('conflict', this)">⚔️</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('cyber', this)">💻</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('protests', this)">📢</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('politics', this)">📜</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('sports', this)">⚽</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('tech-business', this)">💼</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('finance', this)">💰</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('health', this)">🏥</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('energy', this)">⚡</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('transport', this)">🚌</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('maritime', this)">🚢</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('infrastructure', this)">🏗️</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('science', this)">🎓</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('wildlife', this)">🐾</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('culture', this)">🎨</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('crime', this)">⚖️</button>
+            </div>
+            <div class="category-name-badge" id="categoryNameBadge">Category: 📰 General News</div>
+            <input type="hidden" id="categorySlug" value="general">
+
+            <!-- CASUALTY COUNT FIELDS -->
+            <div style="display: flex; gap: 12px; margin-top: 8px;">
+                <div style="flex: 1;">
+                    <label for="articleInjured">🩹 Injured Count</label>
+                    <input type="number" id="articleInjured" min="0" placeholder="0">
+                </div>
+                <div style="flex: 1;">
+                    <label for="articleKilled">✝️ Killed Count</label>
+                    <input type="number" id="articleKilled" min="0" placeholder="0">
+                </div>
+            </div>
+
+            <label for="articleTitle">Title</label>
+            <input type="text" id="articleTitle" placeholder="Article title...">
+
+            <label for="articleSummary">Summary</label>
+            <textarea id="articleSummary" rows="3" placeholder="Brief description..."></textarea>
+
+            <label for="articleImage">Image URL</label>
+            <input type="url" id="articleImage" placeholder="Auto-populated image link...">
+
+            <label for="articleDate">Publish Date</label>
+            <input type="date" id="articleDate">
+
+            <input type="hidden" id="editingArticleId">
+            <input type="hidden" id="articleLat">
+            <input type="hidden" id="articleLng">
+
+            <div class="modal-buttons">
+                <button class="btn-cancel" onclick="closeModal('articleModal')">Cancel</button>
+                <button class="btn-submit" onclick="saveArticle()">Save Article</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ADD TIMELINE UPDATE SUB-MODAL -->
+    <div class="modal-overlay" id="updateModal">
+        <div class="modal">
+            <h3>Add Article Update to Event Timeline</h3>
+            
+            <label for="updateUrl">Follow-up Article URL</label>
+            <input type="url" id="updateUrl" placeholder="Paste news link here..." onchange="fetchUpdateMetadata(this.value)">
+
+            <label for="updateTitle">Update Title / Headline</label>
+            <input type="text" id="updateTitle" placeholder="e.g. Police confirm road reopened">
+
+            <label for="updateSource">Source Name</label>
+            <input type="text" id="updateSource" placeholder="e.g. NRK, VG, Aftenposten">
+
+            <label for="updateDate">Publish Date</label>
+            <input type="date" id="updateDate">
+
+            <input type="hidden" id="parentArticleId">
+
+            <div class="modal-buttons">
+                <button class="btn-cancel" onclick="closeModal('updateModal')">Cancel</button>
+                <button class="btn-submit" onclick="saveTimelineUpdate()">Add Update</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AUTH MODAL -->
+    <div class="modal-overlay" id="authModal">
+        <div class="modal">
+            <h3 id="authModalTitle">Sign In</h3>
+            
+            <form onsubmit="handleAuthSubmit(event)">
+                <div id="registerOnlyFields" style="display: none;">
+                    <label for="authEmail">Email</label>
+                    <input type="email" id="authEmail" placeholder="you@example.com">
+                </div>
+
+                <label for="authIdentifier">Username or Email</label>
+                <input type="text" id="authIdentifier" name="username" autocomplete="username" required placeholder="Username">
+
+                <label for="authPassword">Password</label>
+                <input type="password" id="authPassword" name="password" autocomplete="current-password" required placeholder="••••••••">
+
+                <div class="modal-buttons" style="align-items: center; justify-content: space-between;">
+                    <a href="#" id="authToggleLink" onclick="toggleAuthMode(event)" style="font-size: 12px; color: #2563eb;">Need an account? Register</a>
+                    <div>
+                        <button type="button" class="btn-cancel" onclick="closeModal('authModal')">Cancel</button>
+                        <button type="submit" class="btn-submit">Submit</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- JS Libraries -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    <script src="https://unpkg.com/noUiSlider@15.7.1/dist/nouislider.min.js"></script>
+
+    <script>
+        let currentUser = null;
+        let isRegisterMode = false;
+        let articlesData = [];
+        let markersMap = {};
+        let dualSlider = null;
+        let initialTargetId = null;
+        let detectedCoords = null;
+
+        const CATEGORY_MAP = {
+            'general':        { emoji: '📰', name: 'General News' },
+            'breaking':       { emoji: '🔴', name: 'Breaking News' },
+            'collisions':     { emoji: '💥', name: 'Collisions & Accidents' },
+            'landslides':     { emoji: '⛰️', name: 'Rockslides & Landslides' },
+            'fires':          { emoji: '🔥', name: 'Fires & Wildfires' },
+            'hazards':        { emoji: '⚠️', name: 'General Hazard & Warning' },
+            'winds':          { emoji: '💨', name: 'High Winds & Gales' },
+            'tornadoes':      { emoji: '🌪️', name: 'Tornadoes & Severe Storms' },
+            'thunderstorms':  { emoji: '🌩️', name: 'Severe Thunderstorm' },
+            'blizzards':      { emoji: '❄️', name: 'Extreme Cold & Blizzards' },
+            'floods':         { emoji: '🌊', name: 'Floods & Waves' },
+            'heatwaves':      { emoji: '☀️', name: 'Extreme Heatwave' },
+            'volcanic':       { emoji: '🌋', name: 'Volcanic Activity' },
+            'drones':         { emoji: '🛸', name: 'Drone Sightings & UAV' },
+            'military':       { emoji: '🎖️', name: 'Military Operations' },
+            'missiles':       { emoji: '🚀', name: 'Missile & Air Activity' },
+            'conflict':       { emoji: '⚔️', name: 'Conflict & Defense' },
+            'cyber':          { emoji: '💻', name: 'Cyberattacks & IT Outages' },
+            'protests':       { emoji: '📢', name: 'Protests & Rallies' },
+            'politics':       { emoji: '📜', name: 'Politics' },
+            'sports':         { emoji: '⚽', name: 'Sports' },
+            'tech-business':  { emoji: '💼', name: 'Tech & Business' },
+            'finance':        { emoji: '💰', name: 'Finance & Economy' },
+            'health':         { emoji: '🏥', name: 'Public Health' },
+            'energy':         { emoji: '⚡', name: 'Energy & Power' },
+            'transport':      { emoji: '🚌', name: 'Public Transport & Travel' },
+            'maritime':       { emoji: '🚢', name: 'Maritime & Shipping' },
+            'infrastructure': { emoji: '🏗️', name: 'Infrastructure & Construction' },
+            'science':        { emoji: '🎓', name: 'Education & Science' },
+            'wildlife':       { emoji: '🐾', name: 'Wildlife & Environment' },
+            'culture':        { emoji: '🎨', name: 'Culture & Arts' },
+            'crime':          { emoji: '⚖️', name: 'Crime & Legal' }
+        };
+
+        const map = L.map('map').setView([64.5, 11.5], 5);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        const markersCluster = L.markerClusterGroup();
+        map.addLayer(markersCluster);
+
+        function parseUrlParams() {
+            const params = new URLSearchParams(window.location.search);
+            const catSlug = params.get('category');
+            const targetId = params.get('id');
+
+            if (catSlug) {
+                const selectEl = document.getElementById('categoryFilter');
+                const matchingOption = Array.from(selectEl.options).find(opt => opt.dataset.slug === catSlug.toLowerCase());
+                if (matchingOption) selectEl.value = matchingOption.value;
+            }
+
+            if (targetId) initialTargetId = parseInt(targetId);
+        }
+
+        function handleCategoryFilterChange() {
+            const selectEl = document.getElementById('categoryFilter');
+            const selectedOpt = selectEl.options[selectEl.selectedIndex];
+            const slug = selectedOpt.dataset.slug || 'all';
+
+            const url = new URL(window.location);
+            if (slug === 'all') url.searchParams.delete('category');
+            else url.searchParams.set('category', slug);
+            window.history.replaceState({}, '', url);
+
+            renderMarkers();
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const btn = document.getElementById('sidebarToggleBtn');
+            sidebar.classList.toggle('collapsed');
+            btn.innerText = sidebar.classList.contains('collapsed') ? '◀' : '▶';
+        }
+
+        function copyDirectLink(id) {
+            const url = new URL(window.location.origin + window.location.pathname);
+            url.searchParams.set('id', id);
+            navigator.clipboard.writeText(url.toString()).then(() => {
+                alert("Direct link copied to clipboard:\n" + url.toString());
+            }).catch(() => {
+                prompt("Copy this direct link:", url.toString());
+            });
+        }
+
+        function initDualSlider() {
+            const sliderElement = document.getElementById('dualDateSlider');
+            const now = new Date();
+            const maxDays = 3650;
+            const defaultStartDaysAgo = 365;
+
+            noUiSlider.create(sliderElement, {
+                start: [maxDays - defaultStartDaysAgo, maxDays],
+                connect: true,
+                step: 1,
+                behaviour: 'tap-drag',
+                range: { 'min': 0, 'max': maxDays }
+            });
+
+            dualSlider = sliderElement.noUiSlider;
+
+            sliderElement.addEventListener('wheel', function (e) {
+                e.preventDefault();
+                const currentVals = dualSlider.get().map(Number);
+                const delta = e.deltaY < 0 ? 7 : -7;
+
+                dualSlider.set([currentVals[0] + delta, currentVals[1] + delta]);
+                fetchArticlesFromAPI();
+            }, { passive: false });
+
+            dualSlider.on('update', function (values) {
+                const startOffsetDays = maxDays - Math.round(values[0]);
+                const endOffsetDays = maxDays - Math.round(values[1]);
+
+                const startDate = new Date();
+                startDate.setDate(now.getDate() - startOffsetDays);
+
+                const endDate = new Date();
+                endDate.setDate(now.getDate() - endOffsetDays);
+
+                document.getElementById('startDate').value = startDate.toISOString().split('T')[0];
+                document.getElementById('endDate').value = endDate.toISOString().split('T')[0];
+
+                renderMarkers();
+            });
+
+            dualSlider.on('change', function () {
+                fetchArticlesFromAPI();
+            });
+        }
+
+        function applyPreset(daysAgo, event) {
+            const maxDays = 3650;
+            const startDiff = Math.min(daysAgo, maxDays);
+            const endDiff = 0;
+
+            dualSlider.set([maxDays - startDiff, maxDays - endDiff]);
+
+            document.querySelectorAll('.btn-preset').forEach(btn => btn.classList.remove('active'));
+            if (event && event.target) {
+                event.target.classList.add('active');
+            }
+
+            fetchArticlesFromAPI();
+        }
+
+        function syncInputToSlider() {
+            const startVal = new Date(document.getElementById('startDate').value);
+            const endVal = new Date(document.getElementById('endDate').value);
+            const now = new Date();
+            const maxDays = 3650;
+
+            if (!isNaN(startVal) && !isNaN(endVal)) {
+                const startDiff = Math.max(0, Math.round((now - startVal) / (1000 * 60 * 60 * 24)));
+                const endDiff = Math.max(0, Math.round((now - endVal) / (1000 * 60 * 60 * 24)));
+
+                dualSlider.set([maxDays - startDiff, maxDays - endDiff]);
+                fetchArticlesFromAPI();
+            }
+        }
+
+        async function checkSession() {
+            try {
+                const res = await fetch('api/auth.php?action=me');
+                const data = await res.json();
+                
+                const authBar = document.getElementById('authBar');
+                if (data.authenticated) {
+                    currentUser = data.user;
+                    authBar.innerHTML = `
+                        <div class="user-badge">👤 <strong>${currentUser.username}</strong></div>
+                        <button class="btn-logout" onclick="logout()">Logout</button>
+                    `;
+                } else {
+                    currentUser = null;
+                    authBar.innerHTML = `<button class="btn-login" onclick="openAuthModal()">Login / Register</button>`;
+                }
+            } catch (err) {}
+        }
+
+        function openAuthModal() { document.getElementById('authModal').style.display = 'flex'; }
+
+        function toggleAuthMode(e) {
+            e.preventDefault();
+            isRegisterMode = !isRegisterMode;
+            document.getElementById('authModalTitle').innerText = isRegisterMode ? 'Create Account' : 'Sign In';
+            document.getElementById('registerOnlyFields').style.display = isRegisterMode ? 'block' : 'none';
+        }
+
+        async function handleAuthSubmit(e) {
+            e.preventDefault();
+            const action = isRegisterMode ? 'register' : 'login';
+            const payload = {
+                username_or_email: document.getElementById('authIdentifier').value,
+                password: document.getElementById('authPassword').value
+            };
+
+            if (isRegisterMode) {
+                payload.username = document.getElementById('authIdentifier').value;
+                payload.email = document.getElementById('authEmail').value;
+            }
+
+            const res = await fetch(`api/auth.php?action=${action}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                closeModal('authModal');
+                checkSession();
+            } else {
+                const data = await res.json();
+                alert(data.error || 'Auth failed');
+            }
+        }
+
+        async function logout() {
+            await fetch('api/auth.php?action=logout');
+            checkSession();
+            fetchArticlesFromAPI();
+        }
+
+        map.on('click', function(e) {
+            if (!currentUser) {
+                alert("Please log in to add news pins.");
+                openAuthModal();
+                return;
+            }
+            openAddModal(e.latlng.lat, e.latlng.lng);
+        });
+
+        function closeModal(modalId) { document.getElementById(modalId).style.display = 'none'; }
+        function clearModalInputs() {
+            document.getElementById('articleUrl').value = '';
+            document.getElementById('articleTitle').value = '';
+            document.getElementById('articleSummary').value = '';
+            document.getElementById('articleImage').value = '';
+            document.getElementById('editingArticleId').value = '';
+            document.getElementById('articleInjured').value = '';
+            document.getElementById('articleKilled').value = '';
+        }
+
+        function selectEmoji(slug, btn) {
+            const categoryInfo = CATEGORY_MAP[slug];
+            if (!categoryInfo) return;
+
+            document.querySelectorAll('.emoji-btn').forEach(b => b.classList.remove('active'));
+            if(btn) btn.classList.add('active');
+
+            document.getElementById('categorySlug').value = slug;
+            document.getElementById('categoryNameBadge').innerText = `Category: ${categoryInfo.emoji} ${categoryInfo.name}`;
+        }
+
+        function openAddModal(lat, lng) {
+            document.getElementById('modalTitle').innerText = 'Add News Article';
+            document.getElementById('editingArticleId').value = '';
+            document.getElementById('articleLat').value = lat;
+            document.getElementById('articleLng').value = lng;
+            document.getElementById('coordDisplay').innerText = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+            document.getElementById('suggestedLocBox').style.display = 'none';
+
+            document.getElementById('articleDate').value = new Date().toISOString().split('T')[0];
+            clearModalInputs();
+            
+            document.getElementById('diffReviewBox').style.display = 'none';
+            selectEmoji('general');
+            document.getElementById('articleModal').style.display = 'flex';
+        }
+
+        function editArticle(id) {
+            const item = articlesData.find(a => a.id == id);
+            if (!item) return;
+
+            document.getElementById('modalTitle').innerText = 'Edit News Article';
+            document.getElementById('editingArticleId').value = item.id;
+            document.getElementById('articleTitle').value = item.title;
+            document.getElementById('articleSummary').value = item.summary || '';
+            document.getElementById('articleUrl').value = item.url;
+            document.getElementById('articleImage').value = item.image_url || '';
+            document.getElementById('articleInjured').value = item.injured_count || 0;
+            document.getElementById('articleKilled').value = item.killed_count || 0;
+            document.getElementById('articleDate').value = item.published_at.split(' ')[0];
+            
+            const lat = parseFloat(item.latitude);
+            const lng = parseFloat(item.longitude);
+            document.getElementById('articleLat').value = lat;
+            document.getElementById('articleLng').value = lng;
+            document.getElementById('coordDisplay').innerText = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+            document.getElementById('suggestedLocBox').style.display = 'none';
+
+            document.getElementById('diffReviewBox').style.display = 'none';
+
+            const targetSlug = item.category_slug || 'general';
+            const targetBtn = Array.from(document.querySelectorAll('.emoji-btn')).find(b => b.innerText.trim() === item.emoji);
+            selectEmoji(targetSlug, targetBtn);
+
+            document.getElementById('articleModal').style.display = 'flex';
+        }
+
+        function openUpdateModal(parentArticleId) {
+            if (!currentUser) {
+                alert("Please log in to add timeline updates.");
+                openAuthModal();
+                return;
+            }
+            document.getElementById('parentArticleId').value = parentArticleId;
+            document.getElementById('updateUrl').value = '';
+            document.getElementById('updateTitle').value = '';
+            document.getElementById('updateSource').value = '';
+            document.getElementById('updateDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('updateModal').style.display = 'flex';
+        }
+
+        async function fetchMetadata(url) {
+            if (!url) return;
+            try {
+                const response = await fetch(`api/parse_og.php?url=${encodeURIComponent(url)}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.title) document.getElementById('articleTitle').value = data.title;
+                    if (data.description) document.getElementById('articleSummary').value = data.description;
+                    if (data.image) document.getElementById('articleImage').value = data.image;
+                    if (data.date) document.getElementById('articleDate').value = data.date;
+                    
+                    if (data.injured !== null && data.injured !== undefined) document.getElementById('articleInjured').value = data.injured;
+                    if (data.killed !== null && data.killed !== undefined) document.getElementById('articleKilled').value = data.killed;
+
+                    if (data.category_slug) {
+                        const targetBtn = Array.from(document.querySelectorAll('.emoji-btn')).find(b => {
+                            const mappedInfo = CATEGORY_MAP[data.category_slug];
+                            return mappedInfo && b.innerText.trim() === mappedInfo.emoji;
+                        });
+                        selectEmoji(data.category_slug, targetBtn);
+                    }
+
+                    if (data.suggested_place) {
+                        geocodeLocation(data.suggested_place);
+                    }
+                }
+            } catch (err) {}
+        }
+
+        async function geocodeLocation(placeName) {
+            try {
+                const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(placeName)}`);
+                const results = await res.json();
+
+                if (results && results.length > 0) {
+                    const lat = parseFloat(results[0].lat);
+                    const lon = parseFloat(results[0].lon);
+
+                    detectedCoords = { lat, lon, display_name: results[0].display_name };
+
+                    document.getElementById('detectedPlaceName').innerText = `${placeName} (${results[0].display_name.split(',')[0]})`;
+                    document.getElementById('suggestedLocBox').style.display = 'block';
+                }
+            } catch (err) {}
+        }
+
+        function useSuggestedLocation() {
+            if (!detectedCoords) return;
+
+            document.getElementById('articleLat').value = detectedCoords.lat;
+            document.getElementById('articleLng').value = detectedCoords.lon;
+            document.getElementById('coordDisplay').innerText = `${detectedCoords.lat.toFixed(5)}, ${detectedCoords.lon.toFixed(5)}`;
+
+            const btn = document.getElementById('btnUseSuggestedLoc');
+            btn.innerText = '✓ Coordinates Updated to Suggested Location';
+            btn.style.background = '#16a34a';
+        }
+
+        async function fetchUpdateMetadata(url) {
+            if (!url) return;
+            try {
+                const response = await fetch(`api/parse_og.php?url=${encodeURIComponent(url)}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.title) document.getElementById('updateTitle').value = data.title;
+                    if (data.date) document.getElementById('updateDate').value = data.date;
+                }
+            } catch (err) {}
+        }
+
+        async function refreshArticleMetadata(id) {
+            if (!currentUser) {
+                alert("Please log in to refresh article data.");
+                openAuthModal();
+                return;
+            }
+
+            const item = articlesData.find(a => a.id == id);
+            if (!item) return;
+
+            try {
+                const response = await fetch(`api/parse_og.php?url=${encodeURIComponent(item.url)}`);
+                if (!response.ok) {
+                    alert("Could not fetch live metadata from the article URL.");
+                    return;
+                }
+
+                const freshData = await response.json();
+
+                const freshTitle = freshData.title || item.title;
+                const freshSummary = freshData.description || item.summary || '';
+                const freshImage = freshData.image || item.image_url || '';
+                const freshInjured = (freshData.injured !== null && freshData.injured !== undefined) ? freshData.injured : (item.injured_count || 0);
+                const freshKilled = (freshData.killed !== null && freshData.killed !== undefined) ? freshData.killed : (item.killed_count || 0);
+                const freshDate = freshData.date || item.published_at.split(' ')[0];
+
+                const diffContainer = document.getElementById('diffContainer');
+                diffContainer.innerHTML = '';
+                let hasChanges = false;
+
+                function addDiffRow(label, fieldId, oldVal, newVal) {
+                    if (String(oldVal || '').trim() !== String(newVal || '').trim()) {
+                        hasChanges = true;
+                        const row = document.createElement('div');
+                        row.className = 'diff-row';
+                        row.innerHTML = `
+                            <div class="diff-field-label">${label}</div>
+                            <div class="diff-old">- Stored: ${oldVal || '<i>(empty)</i>'}</div>
+                            <div class="diff-new">+ Scraped: ${newVal || '<i>(empty)</i>'}</div>
+                            <button type="button" class="btn-rollback" onclick="rollbackField('${fieldId}', this)">↺ Keep Old</button>
+                        `;
+                        row.querySelector('.btn-rollback').dataset.oldValue = oldVal;
+                        diffContainer.appendChild(row);
+                    }
+                }
+
+                addDiffRow('Title', 'articleTitle', item.title, freshTitle);
+                addDiffRow('Summary', 'articleSummary', item.summary, freshSummary);
+                addDiffRow('Injured Count', 'articleInjured', item.injured_count || 0, freshInjured);
+                addDiffRow('Killed Count', 'articleKilled', item.killed_count || 0, freshKilled);
+                
+                if (item.image_url !== freshImage) {
+                    addDiffRow('Image URL', 'articleImage', item.image_url, freshImage);
+                }
+
+                const diffReviewBox = document.getElementById('diffReviewBox');
+                diffReviewBox.style.display = 'block';
+
+                if (!hasChanges) {
+                    diffContainer.innerHTML = '<div style="color: #64748b; font-style: italic; font-size: 11px; padding: 6px;">No differences found between stored pin and live article. Summary/casualties appear up-to-date.</div>';
+                }
+
+                document.getElementById('modalTitle').innerText = 'Review & Update Live Article';
+                document.getElementById('editingArticleId').value = item.id;
+                document.getElementById('articleTitle').value = freshTitle;
+                document.getElementById('articleSummary').value = freshSummary;
+                document.getElementById('articleUrl').value = item.url;
+                document.getElementById('articleImage').value = freshImage;
+                document.getElementById('articleInjured').value = freshInjured;
+                document.getElementById('articleKilled').value = freshKilled;
+                document.getElementById('articleDate').value = freshDate;
+                
+                const lat = parseFloat(item.latitude);
+                const lng = parseFloat(item.longitude);
+                document.getElementById('articleLat').value = lat;
+                document.getElementById('articleLng').value = lng;
+                document.getElementById('coordDisplay').innerText = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+
+                const targetSlug = item.category_slug || 'general';
+                const targetBtn = Array.from(document.querySelectorAll('.emoji-btn')).find(b => b.innerText.trim() === item.emoji);
+                selectEmoji(targetSlug, targetBtn);
+
+                document.getElementById('articleModal').style.display = 'flex';
+
+            } catch (err) {
+                console.error("Refresh error:", err);
+                alert("Error fetching fresh article metadata.");
+            }
+        }
+
+        function rollbackField(fieldId, btn) {
+            const oldVal = btn.dataset.oldValue || '';
+            const inputField = document.getElementById(fieldId);
+            
+            if (inputField) {
+                inputField.value = oldVal;
+                
+                btn.innerText = '✓ Using Old';
+                btn.classList.add('active');
+                btn.closest('.diff-row').style.borderColor = '#dc2626';
+            }
+        }
+
+        async function fetchArticlesFromAPI() {
+            const start = document.getElementById('startDate').value;
+            const end = document.getElementById('endDate').value;
+            if (!start || !end) return;
+
+            try {
+                const res = await fetch(`api/articles.php?start_date=${start}&end_date=${end}`);
+                if (res.ok) {
+                    articlesData = await res.json();
+                    renderMarkers();
+
+                    if (initialTargetId) {
+                        focusIncident(initialTargetId);
+                        initialTargetId = null;
+                    }
+                }
+            } catch (err) {}
+        }
+
+        async function saveArticle() {
+            const articleId = document.getElementById('editingArticleId').value;
+            const payload = {
+                id: articleId ? parseInt(articleId) : null,
+                title: document.getElementById('articleTitle').value,
+                summary: document.getElementById('articleSummary').value,
+                url: document.getElementById('articleUrl').value,
+                image_url: document.getElementById('articleImage').value,
+                category_slug: document.getElementById('categorySlug').value || 'general',
+                latitude: parseFloat(document.getElementById('articleLat').value),
+                longitude: parseFloat(document.getElementById('articleLng').value),
+                injured_count: parseInt(document.getElementById('articleInjured').value || 0),
+                killed_count: parseInt(document.getElementById('articleKilled').value || 0),
+                published_at: document.getElementById('articleDate').value
+            };
+
+            const res = await fetch('api/articles.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                closeModal('articleModal');
+                fetchArticlesFromAPI();
+            } else {
+                const data = await res.json();
+                alert(data.error || 'Failed to save article');
+            }
+        }
+
+        async function saveTimelineUpdate() {
+            const payload = {
+                action: 'add_update',
+                article_id: parseInt(document.getElementById('parentArticleId').value),
+                title: document.getElementById('updateTitle').value,
+                url: document.getElementById('updateUrl').value,
+                source_name: document.getElementById('updateSource').value,
+                published_at: document.getElementById('updateDate').value
+            };
+
+            const res = await fetch('api/articles.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                closeModal('updateModal');
+                fetchArticlesFromAPI();
+            } else {
+                const data = await res.json();
+                alert(data.error || 'Failed to save update');
+            }
+        }
+
+        async function deleteArticle(id) {
+            if (!confirm("Are you sure you want to delete this news pin?")) return;
+            const res = await fetch(`api/articles.php?id=${id}`, { method: 'DELETE' });
+            if (res.ok) fetchArticlesFromAPI();
+        }
+
+        async function deleteTimelineUpdate(updateId) {
+            if (!confirm("Delete this timeline update?")) return;
+            const res = await fetch(`api/articles.php?type=update&id=${updateId}`, { method: 'DELETE' });
+            if (res.ok) fetchArticlesFromAPI();
+        }
+
+        function renderMarkers() {
+            markersCluster.clearLayers();
+            markersMap = {};
+
+            const selectEl = document.getElementById('categoryFilter');
+            const selectedOpt = selectEl.options[selectEl.selectedIndex];
+            const selectedCatSlug = selectedOpt.dataset.slug || 'all';
+
+            const startDate = new Date(document.getElementById('startDate').value);
+            const endDate = new Date(document.getElementById('endDate').value);
+            endDate.setHours(23, 59, 59);
+
+            const sidebarFeedEl = document.getElementById('sidebarFeed');
+            sidebarFeedEl.innerHTML = '';
+
+            let visibleCount = 0;
+
+            articlesData.forEach(item => {
+                const pubDate = new Date(item.published_at);
+                
+                const matchesCat = (selectedCatSlug === 'all' || item.category_slug === selectedCatSlug);
+                const matchesDate = (pubDate >= startDate && pubDate <= endDate);
+
+                if (matchesCat && matchesDate) {
+                    visibleCount++;
+
+                    const customIcon = L.divIcon({
+                        className: 'emoji-marker',
+                        html: `<div>${item.emoji}</div>`,
+                        iconSize: [30, 30],
+                        iconAnchor: [15, 15]
+                    });
+
+                    const marker = L.marker([item.latitude, item.longitude], { icon: customIcon });
+                    markersMap[item.id] = marker;
+
+                    const canEdit = currentUser && (currentUser.id == item.user_id || ['admin', 'moderator'].includes(currentUser.role));
+
+                    const injuredNum = parseInt(item.injured_count) || 0;
+                    const killedNum  = parseInt(item.killed_count) || 0;
+
+                    let casualtyHtml = '';
+                    if (injuredNum > 0 || killedNum > 0) {
+                        casualtyHtml = `<div class="casualty-badges">`;
+                        if (injuredNum > 0) casualtyHtml += `<span class="badge-injured">🩹 ${injuredNum} Injured</span>`;
+                        if (killedNum > 0) casualtyHtml += `<span class="badge-killed">✝️ ${killedNum} Killed</span>`;
+                        casualtyHtml += `</div>`;
+                    }
+
+                    let updatesHtml = '';
+                    if (item.updates && item.updates.length > 0) {
+                        updatesHtml = `
+                            <div class="timeline-section">
+                                <div class="timeline-header">⏱️ EVENT TIMELINE (${item.updates.length})</div>
+                                <ul class="timeline-list">
+                        `;
+                        item.updates.forEach(upd => {
+                            const updDate = new Date(upd.published_at).toLocaleDateString();
+                            const canDelUpd = currentUser && (currentUser.id == upd.user_id || ['admin', 'moderator'].includes(currentUser.role));
+                            updatesHtml += `
+                                <li class="timeline-item">
+                                    <div class="timeline-item-date">${updDate} ${upd.source_name ? '• ' + upd.source_name : ''}</div>
+                                    <a href="${upd.url}" target="_blank" rel="noopener">${upd.title}</a>
+                                    ${canDelUpd ? `<button style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:10px;margin-left:4px;" onclick="deleteTimelineUpdate(${upd.id})">✖</button>` : ''}
+                                </li>
+                            `;
+                        });
+                        updatesHtml += `</ul></div>`;
+                    }
+
+                    const popupContent = `
+                        <div class="article-card">
+                            <div class="meta">
+                                <span>${pubDate.toLocaleDateString()}</span>
+                                <span>by ${item.author || 'User'}</span>
+                            </div>
+                            <h4>${item.emoji} ${item.title}</h4>
+                            ${casualtyHtml}
+                            ${item.image_url ? `<img src="${item.image_url}" alt="Article thumbnail">` : ''}
+                            <p>${item.summary || ''}</p>
+                            <a href="${item.url}" target="_blank" rel="noopener">Read Main Article &rarr;</a>
+                            
+                            ${updatesHtml}
+
+                            <div class="card-actions">
+                                <button class="btn-action btn-add-update" onclick="openUpdateModal(${item.id})">+ Add Update</button>
+                                <button class="btn-action btn-direct-link" onclick="copyDirectLink(${item.id})">Direct Link</button>
+                                ${canEdit ? `
+                                    <button class="btn-action" style="color:#0284c7;" onclick="refreshArticleMetadata(${item.id})">🔄 Refresh Data</button>
+                                    <button class="btn-action btn-edit" onclick="editArticle(${item.id})">Edit</button>
+                                    <button class="btn-action btn-delete" onclick="deleteArticle(${item.id})">Delete</button>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+
+                    marker.bindPopup(popupContent);
+                    markersCluster.addLayer(marker);
+
+                    const feedCard = document.createElement('div');
+                    feedCard.className = 'feed-item';
+                    feedCard.onclick = () => focusIncident(item.id);
+                    feedCard.innerHTML = `
+                        <div class="feed-item-header">
+                            <span>${item.emoji} ${pubDate.toLocaleDateString()}</span>
+                            <span>by ${item.author || 'User'}</span>
+                        </div>
+                        <div class="feed-item-title">${item.title}</div>
+                        ${(injuredNum > 0 || killedNum > 0) ? `
+                            <div style="font-size: 10px; margin-top: 4px; color: #f59e0b; display: flex; gap: 6px;">
+                                ${injuredNum > 0 ? '<span style="color:#d97706">🩹 ' + injuredNum + ' Injured</span>' : ''}
+                                ${killedNum > 0 ? '<span style="color:#dc2626">✝️ ' + killedNum + ' Killed</span>' : ''}
+                            </div>
+                        ` : ''}
+                    `;
+                    sidebarFeedEl.appendChild(feedCard);
+                }
+            });
+
+            document.getElementById('feedCount').innerText = visibleCount;
+        }
+
+        function focusIncident(id) {
+            const item = articlesData.find(a => a.id == id);
+            const marker = markersMap[id];
+
+            if (item && marker) {
+                map.flyTo([item.latitude, item.longitude], 15, { duration: 1.2 });
+                setTimeout(() => {
+                    markersCluster.zoomToShowLayer(marker, () => {
+                        marker.openPopup();
+                    });
+                }, 500);
+            }
+        }
+
+        async function searchLocation() {
+            const query = document.getElementById('searchInput').value;
+            if (!query) return;
+
+            try {
+                const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+                const results = await response.json();
+
+                if (results && results.length > 0) {
+                    const place = results[0];
+
+                    if (place.boundingbox) {
+                        const south = parseFloat(place.boundingbox[0]);
+                        const north = parseFloat(place.boundingbox[1]);
+                        const west  = parseFloat(place.boundingbox[2]);
+                        const east  = parseFloat(place.boundingbox[3]);
+
+                        map.fitBounds([[south, west], [north, east]], { maxZoom: 17 });
+                    } else {
+                        map.flyTo([place.lat, place.lon], 16);
+                    }
+                } else { 
+                    alert("Location not found."); 
+                }
+            } catch (err) {}
+        }
+
+        parseUrlParams();
+        initDualSlider();
+        checkSession();
+        fetchArticlesFromAPI();
+    </script>
+</body>
+</html>
