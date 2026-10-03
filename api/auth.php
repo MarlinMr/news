@@ -102,8 +102,8 @@ if ($action === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    $stmt = $pdo->prepare("SELECT * FROM users WHERE username = :input OR email = :input");
-    $stmt->execute(['input' => $loginInput]);
+    $stmt = $pdo->prepare("SELECT * FROM users WHERE username = :username OR email = :email");
+    $stmt->execute(['username' => $loginInput, 'email' => $loginInput]);
     $user = $stmt->fetch();
 
     if ($user && password_verify($password, $user['password_hash'])) {
