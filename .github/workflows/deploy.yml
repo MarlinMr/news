@@ -1,0 +1,35 @@
+name: Deploy to one.com
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    name: SFTP Deploy to one.com
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🚚 Checkout Latest Code
+        uses: actions/checkout@v4
+
+      - name: 📂 SFTP Deploy to ~/webroots/www/news
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.ONECOM_SFTP_HOST }}
+          username: ${{ secrets.ONECOM_SFTP_USER }}
+          password: ${{ secrets.ONECOM_SFTP_PASSWORD }}
+          protocol: sftp
+          port: 22
+          server-dir: webroots/www/news/
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/docker/**
+            Dockerfile
+            docker-compose.yml
+            GEMINI.md
+            test.html
+            api/db.php
+            api/db.php.example
+            api/config.php
+            .env*
