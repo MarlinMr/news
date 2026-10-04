@@ -13,23 +13,26 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 📂 SFTP Deploy to ~/webroots/www/news
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.ONECOM_SFTP_HOST }}
-          username: ${{ secrets.ONECOM_SFTP_USER }}
-          password: ${{ secrets.ONECOM_SFTP_PASSWORD }}
-          protocol: sftp
-          port: 22
-          server-dir: webroots/www/news/
-          exclude: |
-            **/.git*
-            **/.git*/**
-            **/docker/**
-            Dockerfile
-            docker-compose.yml
-            GEMINI.md
-            test.html
-            api/db.php
-            api/db.php.example
-            api/config.php
-            .env*
+        env:
+          SFTP_HOST: ${{ secrets.ONECOM_SFTP_HOST }}
+          SFTP_USER: ${{ secrets.ONECOM_SFTP_USER }}
+          SFTP_PASS: ${{ secrets.ONECOM_SFTP_PASSWORD }}
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y lftp
+          lftp -u "$SFTP_USER","$SFTP_PASS" -e "
+            set sftp:auto-confirm yes;
+            set ssl:verify-certificate no;
+            mirror -R --verbose \
+              --exclude-glob .git* \
+              --exclude-glob docker/ \
+              --exclude-glob Dockerfile \
+              --exclude-glob docker-compose.yml \
+              --exclude-glob GEMINI.md \
+              --exclude-glob test.html \
+              --exclude-glob api/db.php \
+              --exclude-glob api/db.php.example \
+              --exclude-glob api/config.php \
+              --exclude-glob .env* \
+              ./ webroots/www/news/;
+            quit
+          " sftp://"$SFTP_HOST":22
