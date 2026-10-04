@@ -832,9 +832,10 @@
             <input type="url" id="articleImage" placeholder="Auto-populated image link...">
 
             <label for="articleDate">Publish Date</label>
-            <div style="display: flex; gap: 8px;">
+            <div style="display: flex; gap: 8px; align-items: center;">
                 <input type="date" id="articleDate" style="flex: 1;">
                 <input type="time" id="articleTime" value="12:00" style="width: 100px;" step="60">
+                <span id="articleTimezone" style="font-size: 11px; color: #94a3b8; white-space: nowrap;">Europe/Oslo</span>
             </div>
 
             <input type="hidden" id="editingArticleId">
@@ -863,9 +864,11 @@
             <input type="text" id="updateSource" placeholder="e.g. NRK, VG, Aftenposten">
 
             <label for="updateDate">Publish Date</label>
-            <div style="display: flex; gap: 8px;">
+            <div style="display: flex; gap: 8px; align-items: center;">
                 <input type="date" id="updateDate" style="flex: 1;">
                 <input type="time" id="updateTime" value="12:00" style="width: 100px;" step="60">
+                <span id="updateTimezone" style="font-size: 11px; color: #94a3b8; white-space: nowrap;">Europe/Oslo</span>
+            </div>
             </div>
 
             <input type="hidden" id="parentArticleId">

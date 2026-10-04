@@ -7,6 +7,9 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-install pdo pdo_mysql mbstring dom \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Set PHP timezone to Europe/Oslo (handles DST)
+RUN echo "date.timezone = Europe/Oslo" > /usr/local/etc/php/conf.d/timezone.ini
+
 # Enable Apache rewrite module
 RUN a2enmod rewrite
 
