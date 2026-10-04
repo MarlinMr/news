@@ -340,7 +340,7 @@
             .date-pickers { width: 100%; justify-content: space-between; }
             .date-pickers input[type="date"] { flex: 1; width: 45%; font-size: 11px; padding: 4px; }
 
-            .sidebar, .sidebar-toggle-btn { display: none !important; }
+            .sidebar, .sidebar-toggle-btn, .bottom-timeline { display: none !important; }
         }
 
         /* Bottom 1-Week Timeline Bar */
@@ -1902,27 +1902,6 @@
         initDualSlider();
         checkSession();
         fetchArticlesFromAPI();
-
-        function adjustBottomTimelinePosition() {
-            const header = document.querySelector('header');
-            const timeline = document.getElementById('bottomTimeline');
-            if (!header || !timeline) return;
-
-            const isMobile = window.matchMedia('(max-width: 850px)').matches;
-            if (isMobile) {
-                const headerHeight = header.offsetHeight;
-                const safeAreaBottom = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--safe-area-inset-bottom')) || 0;
-                const extraPadding = 12;
-                timeline.style.bottom = (headerHeight + safeAreaBottom + extraPadding) + 'px';
-            } else {
-                timeline.style.bottom = '';
-            }
-        }
-
-        window.addEventListener('resize', adjustBottomTimelinePosition);
-        window.addEventListener('orientationchange', () => setTimeout(adjustBottomTimelinePosition, 100));
-        document.addEventListener('DOMContentLoaded', adjustBottomTimelinePosition);
-        setTimeout(adjustBottomTimelinePosition, 0);
 
         let incidentSearchDebounceTimer = null;
         let activeSearchTab = 'location';
