@@ -832,7 +832,10 @@
             <input type="url" id="articleImage" placeholder="Auto-populated image link...">
 
             <label for="articleDate">Publish Date</label>
-            <input type="datetime-local" id="articleDate">
+            <div style="display: flex; gap: 8px;">
+                <input type="date" id="articleDate" style="flex: 1;">
+                <input type="time" id="articleTime" value="12:00" style="width: 100px;" step="60">
+            </div>
 
             <input type="hidden" id="editingArticleId">
             <input type="hidden" id="articleLat">
@@ -860,7 +863,10 @@
             <input type="text" id="updateSource" placeholder="e.g. NRK, VG, Aftenposten">
 
             <label for="updateDate">Publish Date</label>
-            <input type="datetime-local" id="updateDate">
+            <div style="display: flex; gap: 8px;">
+                <input type="date" id="updateDate" style="flex: 1;">
+                <input type="time" id="updateTime" value="12:00" style="width: 100px;" step="60">
+            </div>
 
             <input type="hidden" id="parentArticleId">
 
@@ -1177,7 +1183,9 @@
             document.getElementById('coordDisplay').innerText = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
             document.getElementById('suggestedLocBox').style.display = 'none';
 
-            document.getElementById('articleDate').value = new Date().toISOString().slice(0, 16);
+            const now = new Date();
+            document.getElementById('articleDate').value = now.toISOString().split('T')[0];
+            document.getElementById('articleTime').value = now.toTimeString().slice(0, 5);
             clearModalInputs();
             
             document.getElementById('diffReviewBox').style.display = 'none';
@@ -1197,7 +1205,9 @@
             document.getElementById('articleImage').value = item.image_url || '';
             document.getElementById('articleInjured').value = item.injured_count || 0;
             document.getElementById('articleKilled').value = item.killed_count || 0;
-            document.getElementById('articleDate').value = item.published_at.replace(' ', 'T').slice(0, 16);
+            const pubDate = new Date(item.published_at.replace(' ', 'T'));
+            document.getElementById('articleDate').value = pubDate.toISOString().split('T')[0];
+            document.getElementById('articleTime').value = pubDate.toTimeString().slice(0, 5);
             
             const lat = parseFloat(item.latitude);
             const lng = parseFloat(item.longitude);
@@ -1225,7 +1235,9 @@
             document.getElementById('updateUrl').value = '';
             document.getElementById('updateTitle').value = '';
             document.getElementById('updateSource').value = '';
-            document.getElementById('updateDate').value = new Date().toISOString().slice(0, 16);
+            const now = new Date();
+            document.getElementById('updateDate').value = now.toISOString().split('T')[0];
+            document.getElementById('updateTime').value = now.toTimeString().slice(0, 5);
             document.getElementById('updateModal').style.display = 'flex';
         }
 
@@ -1238,7 +1250,12 @@
                     if (data.title) document.getElementById('articleTitle').value = data.title;
                     if (data.description) document.getElementById('articleSummary').value = data.description;
                     if (data.image) document.getElementById('articleImage').value = data.image;
-                    if (data.date) document.getElementById('articleDate').value = (data.date.length === 10 ? data.date + 'T00:00' : data.date).slice(0, 16);
+                    if (data.date) {
+                        const d = data.date.length === 10 ? data.date + 'T00:00' : data.date;
+                        const dt = new Date(d);
+                        document.getElementById('articleDate').value = dt.toISOString().split('T')[0];
+                        document.getElementById('articleTime').value = dt.toTimeString().slice(0, 5);
+                    }
                     
                     if (data.injured !== null && data.injured !== undefined) document.getElementById('articleInjured').value = data.injured;
                     if (data.killed !== null && data.killed !== undefined) document.getElementById('articleKilled').value = data.killed;
@@ -1294,7 +1311,12 @@
                 if (response.ok) {
                     const data = await response.json();
                     if (data.title) document.getElementById('updateTitle').value = data.title;
-                    if (data.date) document.getElementById('updateDate').value = (data.date.length === 10 ? data.date + 'T00:00' : data.date).slice(0, 16);
+                    if (data.date) {
+                        const d = data.date.length === 10 ? data.date + 'T00:00' : data.date;
+                        const dt = new Date(d);
+                        document.getElementById('updateDate').value = dt.toISOString().split('T')[0];
+                        document.getElementById('updateTime').value = dt.toTimeString().slice(0, 5);
+                    }
                 }
             } catch (err) {}
         }
@@ -1323,9 +1345,9 @@
                 const freshImage = freshData.image || item.image_url || '';
                 const freshInjured = (freshData.injured !== null && freshData.injured !== undefined) ? freshData.injured : (item.injured_count || 0);
                 const freshKilled = (freshData.killed !== null && freshData.killed !== undefined) ? freshData.killed : (item.killed_count || 0);
-                const freshDate = (freshData.date || item.published_at.split(' ')[0]).length === 10 
-                    ? (freshData.date || item.published_at.split(' ')[0]) + 'T00:00' 
-                    : (freshData.date || item.published_at.split(' ')[0]);
+                const freshDateStr = freshData.date || item.published_at.split(' ')[0];
+                const freshDate = freshDateStr.length === 10 ? freshDateStr + 'T00:00' : freshDateStr;
+                const freshDt = new Date(freshDate);
 
                 const diffContainer = document.getElementById('diffContainer');
                 diffContainer.innerHTML = '';
@@ -1371,7 +1393,8 @@
                 document.getElementById('articleImage').value = freshImage;
                 document.getElementById('articleInjured').value = freshInjured;
                 document.getElementById('articleKilled').value = freshKilled;
-                document.getElementById('articleDate').value = freshDate;
+                document.getElementById('articleDate').value = freshDt.toISOString().split('T')[0];
+                document.getElementById('articleTime').value = freshDt.toTimeString().slice(0, 5);
                 
                 const lat = parseFloat(item.latitude);
                 const lng = parseFloat(item.longitude);
@@ -1435,6 +1458,8 @@
 
         async function saveArticle() {
             const articleId = document.getElementById('editingArticleId').value;
+            const dateVal = document.getElementById('articleDate').value;
+            const timeVal = document.getElementById('articleTime').value || '12:00';
             const payload = {
                 id: articleId ? parseInt(articleId) : null,
                 title: document.getElementById('articleTitle').value,
@@ -1446,7 +1471,7 @@
                 longitude: parseFloat(document.getElementById('articleLng').value),
                 injured_count: parseInt(document.getElementById('articleInjured').value || 0),
                 killed_count: parseInt(document.getElementById('articleKilled').value || 0),
-                published_at: document.getElementById('articleDate').value
+                published_at: dateVal + ' ' + timeVal + ':00'
             };
 
             const res = await fetch('api/articles.php', {
@@ -1465,13 +1490,15 @@
         }
 
         async function saveTimelineUpdate() {
+            const dateVal = document.getElementById('updateDate').value;
+            const timeVal = document.getElementById('updateTime').value || '12:00';
             const payload = {
                 action: 'add_update',
                 article_id: parseInt(document.getElementById('parentArticleId').value),
                 title: document.getElementById('updateTitle').value,
                 url: document.getElementById('updateUrl').value,
                 source_name: document.getElementById('updateSource').value,
-                published_at: document.getElementById('updateDate').value
+                published_at: dateVal + ' ' + timeVal + ':00'
             };
 
             const res = await fetch('api/articles.php', {
