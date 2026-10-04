@@ -6,33 +6,29 @@ on:
 
 jobs:
   deploy:
-    name: SFTP Deploy to one.com
+    name: Deploy to one.com (~/webroots/www/news)
     runs-on: ubuntu-latest
     steps:
       - name: 🚚 Checkout Latest Code
         uses: actions/checkout@v4
 
-      - name: 📂 SFTP Deploy to ~/webroots/www/news
+      - name: 📂 Deploy via rsync over SSH
         env:
-          SFTP_HOST: ${{ secrets.ONECOM_SFTP_HOST }}
-          SFTP_USER: ${{ secrets.ONECOM_SFTP_USER }}
-          SFTP_PASS: ${{ secrets.ONECOM_SFTP_PASSWORD }}
+          SSHPASS: ${{ secrets.ONECOM_SFTP_PASSWORD }}
+          HOST: ${{ secrets.ONECOM_SFTP_HOST }}
+          USER: ${{ secrets.ONECOM_SFTP_USER }}
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y lftp
-          lftp -u "$SFTP_USER","$SFTP_PASS" -e "
-            set sftp:auto-confirm yes;
-            set ssl:verify-certificate no;
-            mirror -R --verbose \
-              --exclude-glob .git* \
-              --exclude-glob docker/ \
-              --exclude-glob Dockerfile \
-              --exclude-glob docker-compose.yml \
-              --exclude-glob GEMINI.md \
-              --exclude-glob test.html \
-              --exclude-glob api/db.php \
-              --exclude-glob api/db.php.example \
-              --exclude-glob api/config.php \
-              --exclude-glob .env* \
-              ./ webroots/www/news/;
-            quit
-          " sftp://"$SFTP_HOST":22
+          sudo apt-get update -qq && sudo apt-get install -y sshpass rsync
+          sshpass -e rsync -avz \
+            -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -q" \
+            --exclude '.git*' \
+            --exclude 'docker/' \
+            --exclude 'Dockerfile' \
+            --exclude 'docker-compose.yml' \
+            --exclude 'GEMINI.md' \
+            --exclude 'test.html' \
+            --exclude 'api/db.php' \
+            --exclude 'api/db.php.example' \
+            --exclude 'api/config.php' \
+            --exclude '.env*' \
+            ./ "$USER"@"$HOST":webroots/www/news/
