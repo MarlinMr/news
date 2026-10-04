@@ -598,18 +598,6 @@
             visibility: visible;
             bottom: 34px;
         }
-
-        .timeline-empty-notice {
-            position: absolute;
-            bottom: -28px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 11px;
-            color: #64748b;
-            font-style: italic;
-            pointer-events: none;
-            white-space: nowrap;
-        }
     </style>
 </head>
 <body>
@@ -1914,10 +1902,6 @@
             countEl.innerText = `${timelineEvents.length} event${timelineEvents.length === 1 ? '' : 's'}`;
 
             if (timelineEvents.length === 0) {
-                const notice = document.createElement('div');
-                notice.className = 'timeline-empty-notice';
-                notice.innerText = 'No incidents logged in this 7-day window. Use ◀ Prev / Next ▶ to browse weeks.';
-                dotsEl.appendChild(notice);
                 return;
             }
 
