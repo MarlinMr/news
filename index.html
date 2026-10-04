@@ -601,13 +601,14 @@
 
         .timeline-empty-notice {
             position: absolute;
-            top: 24px;
+            bottom: -28px;
             left: 50%;
             transform: translateX(-50%);
             font-size: 11px;
             color: #64748b;
             font-style: italic;
             pointer-events: none;
+            white-space: nowrap;
         }
     </style>
 </head>
@@ -888,7 +889,7 @@
             <form onsubmit="handleAuthSubmit(event)">
                 <div id="registerOnlyFields" style="display: none;">
                     <label for="authEmail">Email</label>
-                    <input type="email" id="authEmail" placeholder="you@example.com">
+                    <input type="email" id="authEmail" autocomplete="email" placeholder="you@example.com">
                 </div>
 
                 <label for="authIdentifier">Username or Email</label>
