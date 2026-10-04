@@ -1,4 +1,5 @@
 <?php
+date_default_timezone_set('Europe/Oslo');
 // api/articles.php - BULLETPROOF CORS VERSION
 // Location: Line 1, Character 1 must be '<?php'
 
