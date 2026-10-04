@@ -367,7 +367,7 @@
                 <button type="button" class="btn-preset" onclick="applyPreset(30, event)">1M</button>
                 <button type="button" class="btn-preset" onclick="applyPreset(180, event)">6M</button>
                 <button type="button" class="btn-preset active" onclick="applyPreset(365, event)">1Y</button>
-                <button type="button" class="btn-preset" onclick="applyPreset(3650, event)">ALL</button>
+                <button type="button" class="btn-preset" onclick="applyPreset(365, event)">ALL</button>
             </div>
 
             <div class="slider-wrapper">
@@ -659,7 +659,7 @@
         function initDualSlider() {
             const sliderElement = document.getElementById('dualDateSlider');
             const now = new Date();
-            const maxDays = 3650;
+            const maxDays = 365;
             const defaultStartDaysAgo = 365;
 
             noUiSlider.create(sliderElement, {
@@ -703,7 +703,7 @@
         }
 
         function applyPreset(daysAgo, event) {
-            const maxDays = 3650;
+            const maxDays = 365;
             const startDiff = Math.min(daysAgo, maxDays);
             const endDiff = 0;
 
@@ -721,7 +721,7 @@
             const startVal = new Date(document.getElementById('startDate').value);
             const endVal = new Date(document.getElementById('endDate').value);
             const now = new Date();
-            const maxDays = 3650;
+            const maxDays = 365;
 
             if (!isNaN(startVal) && !isNaN(endVal)) {
                 const startDiff = Math.max(0, Math.round((now - startVal) / (1000 * 60 * 60 * 24)));
