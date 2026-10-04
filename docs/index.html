@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoNews — Docs and How-to</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; font: 16px/1.65 system-ui, sans-serif; background: #0f172a; color: #e2e8f0; }
+        header, main, footer { max-width: 900px; margin: auto; padding: 20px; }
+        header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
+        h1 { font-size: 26px; } h2 { font-size: 21px; color: #f8fafc; }
+        a { color: #7dd3fc; } section, nav { padding: 20px; background: #1e293b; border: 1px solid #334155; border-radius: 8px; margin-bottom: 18px; }
+        nav ul { display: flex; flex-wrap: wrap; gap: 8px 24px; list-style: none; padding: 0; }
+        li { margin-bottom: 8px; } strong { color: #fff; } footer { color: #94a3b8; font-size: 13px; }
+        @media (max-width: 600px) { header, main, footer { padding: 14px; } section, nav { padding: 16px; } }
+    </style>
+</head>
+<body>
+<header><h1>📰 GeoNews · Docs / How-to</h1><a href="../index.html">Back to map</a></header>
+<main>
+    <p>GeoNews puts news incidents on a map and groups follow-up articles into event timelines. You can browse without signing in; sign in to contribute.</p>
+    <nav aria-label="Documentation contents"><ul>
+        <li><a href="#browse">Browse and search</a></li>
+        <li><a href="#add">Add an incident</a></li>
+        <li><a href="#markers">Categories and markers</a></li>
+        <li><a href="#refresh">Edit and refresh data</a></li>
+        <li><a href="#timeline">Timeline articles</a></li>
+        <li><a href="#move">Move a pin</a></li>
+        <li><a href="#bulk">Admin bulk refresh</a></li>
+    </ul></nav>
+    <section id="browse"><h2>Browse and search</h2>
+        <ul>
+            <li>Drag the map to pan and zoom to see more individual markers. Click a cluster to zoom into its incidents; click a marker to open its article card.</li>
+            <li>Use <strong>Map style</strong> to switch between OpenStreetMap, CARTO Light, CARTO Dark and Esri Satellite. Your choice is remembered in this browser; switching styles keeps incident pins and your map position.</li>
+            <li>Use the <strong>Location</strong> search tab for an address or place. Use <strong>Incidents</strong> to search loaded incidents by title, summary, category or author.</li>
+            <li>The category filter and start/end dates control which incident pins appear. Presets give quick date ranges; use the date inputs for a specific range.</li>
+            <li>On desktop, the sidebar lists incidents in the selected range. The bottom timeline offers week/month views with previous, next and current-period controls. Weeks start on Monday at 00:00 Europe/Oslo and end at the following Monday at 00:00. Clicking an event highlights its incident and associated updates.</li>
+            <li><strong>Direct Link</strong> copies a link to an incident. Publication dates and times are shown in <strong>Europe/Oslo</strong>.</li>
+        </ul>
+    </section>
+    <section id="add"><h2>Add an incident</h2>
+        <ol>
+            <li>Sign in using <strong>Login / Register</strong>.</li>
+            <li>Click the incident location on the map to open <strong>Add News Article</strong>.</li>
+            <li>Paste the specific article URL. Metadata can fill in the title, summary, image, publication date/time and a suggested category.</li>
+            <li>Check the details and pin coordinates. If a place is detected, you can choose to move the pin to the suggested location.</li>
+            <li>Choose a category and marker, verify casualty counts and publication time, then click <strong>Save Article</strong>.</li>
+        </ol>
+        <p>Use a link to the actual news article rather than a news site's homepage: refresh reads information from the saved URL.</p>
+    </section>
+    <section id="markers"><h2>Categories and marker emojis</h2>
+        <p><strong>Category</strong> describes the incident and is used by filters. Selecting a category also chooses its default marker—for example 🔥 for Fires or 🗡️ for Violent Crime.</p>
+        <p>Hazard categories include <strong>☢️ Nuclear & Radiation</strong> and <strong>☣️ Biological Hazard</strong>.</p>
+        <p>You can then override the marker in <strong>Map Marker Emoji</strong> without changing the category. The picker lists <strong>Category defaults</strong> first, followed by <strong>Additional markers</strong> beneath a divider: vehicles, police, emergency services, death and weapons.</p>
+        <p>Selecting another category resets the marker to that category's default. Opening an existing article preserves its saved marker, as do metadata suggestions and bulk category refreshes.</p>
+    </section>
+    <section id="refresh"><h2>Edit and refresh data</h2>
+        <p>Open an incident card and choose <strong>Edit</strong> to change its details, or <strong>Refresh Data</strong> to fetch current metadata from its saved URL. These controls are available for articles you can edit; admins and moderators can edit other users' articles.</p>
+        <p>Refresh displays stored and fetched values for changed fields. Use <strong>Keep Old</strong> beside a field to retain the stored value, and click <strong>Save Article</strong> to save your reviewed changes. Refreshing metadata preserves the saved marker.</p>
+        <p>Missing metadata is kept rather than guessed. Category and casualty suggestions are inferred from text: review them before saving. A missing publication time does not establish a clock time; check the retained value.</p>
+    </section>
+    <section id="timeline"><h2>Add a follow-up article to a timeline</h2>
+        <ol>
+            <li>Open an incident card and click <strong>+ Add Update</strong>.</li>
+            <li>Paste the follow-up article URL and check its headline, source name, publication date and time.</li>
+            <li>Click <strong>Add Update</strong>. It appears in that incident's event timeline.</li>
+        </ol>
+        <p>Follow-up articles have their own URL, headline and publication time. They share the incident's pin; categories and marker emojis belong to the master incident.</p>
+    </section>
+    <section id="move"><h2>Move a pin</h2>
+        <p>If you can edit an incident, drag its pin to a new location. A confirmation shows the old and new coordinates. Confirm to save, or cancel to restore the original position. A failed save also restores the original position.</p>
+    </section>
+    <section id="bulk"><h2>Admin bulk refresh</h2>
+        <p>Signed-in admins have a <strong>Bulk update</strong> link beside their account controls. This tool lists all incidents, regardless of date, with timeline articles grouped beneath each incident.</p>
+        <ol>
+            <li>Select incidents and individual articles, or select all. Choose master articles, timeline articles, or both.</li>
+            <li>Select the types of information to refresh. Timeline articles support title, publication date and time.</li>
+            <li>Click <strong>Scan selected articles</strong>. Each article is fetched from <strong>its own saved URL</strong>; scanning does not save changes.</li>
+            <li>Review stored/fetched values below each article. Deselect any changes you want to skip.</li>
+            <li>Click <strong>Apply selected changes</strong>. Per-article results show successful saves and failures.</li>
+        </ol>
+        <p>The Stop button finishes the current article, then stops. Missing information keeps stored values. Date and time can be updated independently; pin coordinates and chosen markers are preserved. If a selected stored field or URL changed since preview, scan again to resolve the conflict.</p>
+    </section>
+</main>
+<footer>GeoNews · Map data © OpenStreetMap contributors</footer>
+</body>
+</html>

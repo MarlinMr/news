@@ -55,6 +55,8 @@ $categoryEmojiMap = [
     'landslides'     => '⛰️',
     'fires'          => '🔥',
     'hazards'        => '⚠️',
+    'nuclear'        => '☢️',
+    'biological-hazard' => '☣️',
     'winds'          => '💨',
     'tornadoes'      => '🌪️',
     'thunderstorms'  => '🌩️',
@@ -81,7 +83,7 @@ $categoryEmojiMap = [
     'wildlife'       => '🐾',
     'culture'        => '🎨',
     'crime'          => '⚖️',
-    'violent-crime'  => '🔪'
+    'violent-crime'  => '🗡️'
 ];
 
 // ------------------------------------------------------------------
@@ -194,15 +196,26 @@ if ($method === 'POST') {
     $requestedSlug = isset($input['category_slug']) ? trim($input['category_slug']) : 'general';
     if (array_key_exists($requestedSlug, $categoryEmojiMap)) { $categorySlug = $requestedSlug; $emoji = $categoryEmojiMap[$requestedSlug]; } 
     else { $categorySlug = 'general'; $emoji = $categoryEmojiMap['general']; }
+    // Emoji is an independent marker choice. Keep category defaults for older clients.
+    if (array_key_exists('emoji', $input)) {
+        $requestedEmoji = $input['emoji'];
+        if (!is_string($requestedEmoji) || mb_strlen($requestedEmoji) > 10 || !preg_match('/^(?=[\s\S]*[\p{Extended_Pictographic}\p{Regional_Indicator}])[\p{Extended_Pictographic}\p{Regional_Indicator}\x{FE0F}\x{FE0E}\x{200D}\x{1F3FB}-\x{1F3FF}]+$/u', $requestedEmoji)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid marker emoji']);
+            exit;
+        }
+        $emoji = $requestedEmoji;
+    }
     if (!$url) { http_response_code(400); echo json_encode(['error' => 'Invalid URL']); exit; }
 
     // UPDATE
     if ($articleId !== null && $articleId > 0) {
-        $checkStmt = $pdo->prepare("SELECT user_id FROM articles WHERE id = :id");
+        $checkStmt = $pdo->prepare("SELECT user_id, emoji FROM articles WHERE id = :id");
         $checkStmt->execute(['id' => $articleId]);
         $existing = $checkStmt->fetch();
         if (!$existing) { http_response_code(404); echo json_encode(['error' => 'Article not found to update']); exit; }
         if ($existing['user_id'] != $currentUserId && !in_array($currentUserRole, ['moderator', 'admin'])) { http_response_code(403); echo json_encode(['error' => 'Forbidden']); exit; }
+        if (!array_key_exists('emoji', $input)) $emoji = $existing['emoji'];
         $stmt = $pdo->prepare("UPDATE articles SET title = :title, summary = :summary, url = :url, image_url = :image_url, emoji = :emoji, category_slug = :category_slug, latitude = :latitude, longitude = :longitude, injured_count = :injured_count, killed_count = :killed_count, published_at = :published_at WHERE id = :id");
         $success = $stmt->execute(['id' => $articleId, 'title' => $title, 'summary' => $summary, 'url' => $url, 'image_url' => $imageUrl, 'emoji' => $emoji, 'category_slug' => $categorySlug, 'latitude' => $latitude, 'longitude' => $longitude, 'injured_count' => $injuredCount, 'killed_count' => $killedCount, 'published_at' => $publishedAt]);
         if ($success) { echo json_encode(['message' => 'Article updated successfully', 'id' => $articleId]); } 

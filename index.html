@@ -28,13 +28,21 @@
             align-items: center;
             justify-content: space-between;
             gap: 12px;
+            flex-wrap: wrap;
             z-index: 1000;
             box-shadow: 0 2px 8px rgba(0,0,0,0.3);
             min-height: 64px;
         }
 
         .header-brand { display: flex; align-items: center; gap: 6px; font-weight: bold; font-size: 18px; flex-shrink: 0; }
+        .header-top-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .brand-stack { display: flex; flex-direction: column; gap: 2px; }
+        .built-date { font-size: 10px; font-weight: normal; color: #94a3b8; }
+        .header-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        .header-links a, .auth-bar a { color: #93c5fd; font-size: 12px; white-space: nowrap; }
         .controls-group { display: flex; gap: 8px; flex-shrink: 0; }
+        .map-style-control { display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+        .map-style-control label { font-size: 11px; color: #94a3b8; }
 
         .category-select, .search-box input {
             padding: 6px 10px;
@@ -134,7 +142,7 @@
             width: 105px;
         }
 
-        .auth-bar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-shrink: 0; }
+        .auth-bar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
         .auth-bar button { padding: 6px 12px; border-radius: 4px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
         .btn-login { background: #3b82f6; color: white; }
         .btn-logout { background: #ef4444; color: white; }
@@ -269,10 +277,14 @@
         .modal h3 { margin-bottom: 12px; color: #0f172a; }
         .modal label { font-size: 12px; font-weight: 700; color: #334155; display: block; margin-top: 10px; }
         .modal input, .modal textarea { width: 100%; padding: 8px 10px; margin-top: 4px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; }
+        .modal .category-select { width: 100%; padding: 8px 10px; margin-top: 4px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #0f172a; font-size: 14px; color-scheme: light; }
         
-        .emoji-grid { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; max-height: 140px; overflow-y: auto; padding: 4px; border: 1px solid #f1f5f9; border-radius: 6px; }
+        .emoji-grid { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; max-height: 220px; overflow-y: auto; padding: 4px; border: 1px solid #f1f5f9; border-radius: 6px; }
         .emoji-btn { font-size: 20px; padding: 6px 8px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; }
         .emoji-btn.active { background: #dbeafe; border-color: #2563eb; }
+        .emoji-grid .emoji-group { width: 100%; display: flex; flex-wrap: wrap; gap: 6px; }
+        .emoji-grid .emoji-group-title { width: 100%; font-size: 11px; font-weight: 600; color: #64748b; padding: 3px; }
+        .emoji-grid .emoji-extra-group { border-top: 1px solid #cbd5e1; padding-top: 8px; margin-top: 4px; }
         .category-name-badge { font-size: 12px; color: #2563eb; font-weight: 600; margin-top: 4px; }
 
         /* Diff Box Styles */
@@ -585,11 +597,23 @@
 
     <header>
         <div class="header-top-row">
-            <div class="header-brand">📰 GeoNews</div>
+            <div class="brand-stack">
+                <div class="header-brand">📰 GeoNews</div>
+                <span class="built-date" id="builtDate" hidden></span>
+            </div>
+            <nav class="header-links" aria-label="Help"><a href="docs/">Docs / How-to</a></nav>
             <div class="auth-bar" id="authBar"></div>
         </div>
 
         <div class="controls-group">
+            <div class="map-style-control">
+                <label for="mapStyle">Map style</label>
+                <select id="mapStyle" class="category-select" onchange="changeMapStyle(this.value)">
+                    <option value="osm">OpenStreetMap</option>
+                    <option value="light">CARTO Light</option>
+                    <option value="dark">CARTO Dark</option>
+                </select>
+            </div>
             <div class="search-box" id="searchBox">
                 <div class="search-tabs" role="tablist" aria-label="Search mode">
                     <button type="button" class="search-tab active" role="tab" aria-selected="true" aria-controls="location-search-panel" id="tab-location" onclick="switchSearchTab('location')">📍 Location</button>
@@ -621,6 +645,8 @@
                 <option value="⛰️" data-slug="landslides">⛰️ Rockslides & Landslides</option>
                 <option value="🔥" data-slug="fires">🔥 Fires & Wildfires</option>
                 <option value="⚠️" data-slug="hazards">⚠️ General Hazard & Warning</option>
+                <option value="☢️" data-slug="nuclear">☢️ Nuclear & Radiation</option>
+                <option value="☣️" data-slug="biological-hazard">☣️ Biological Hazard</option>
                 <option value="💨" data-slug="winds">💨 High Winds & Gales</option>
                 <option value="🌪️" data-slug="tornadoes">🌪️ Tornadoes & Severe Storms</option>
                 <option value="🌩️" data-slug="thunderstorms">🌩️ Severe Thunderstorm</option>
@@ -647,7 +673,7 @@
                 <option value="🐾" data-slug="wildlife">🐾 Wildlife & Environment</option>
                 <option value="🎨" data-slug="culture">🎨 Culture & Arts</option>
                 <option value="⚖️" data-slug="crime">⚖️ Crime & Legal</option>
-                <option value="🔪" data-slug="violent-crime">🔪 Violent Crime</option>
+                <option value="🗡️" data-slug="violent-crime">🗡️ Violent Crime</option>
             </select>
 
             <div class="preset-group">
@@ -744,44 +770,56 @@
                 </div>
             </div>
 
-            <label id="categoryGridLabel">Category & Emoji Marker</label>
-            <div class="emoji-grid" role="group" aria-labelledby="categoryGridLabel">
-                <button type="button" class="emoji-btn active" onclick="selectEmoji('general', this)">📰</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('breaking', this)">🔴</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('collisions', this)">💥</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('landslides', this)">⛰️</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('fires', this)">🔥</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('hazards', this)">⚠️</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('winds', this)">💨</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('tornadoes', this)">🌪️</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('thunderstorms', this)">🌩️</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('blizzards', this)">❄️</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('floods', this)">🌊</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('heatwaves', this)">☀️</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('volcanic', this)">🌋</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('drones', this)">🛸</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('military', this)">🎖️</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('missiles', this)">🚀</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('conflict', this)">⚔️</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('cyber', this)">💻</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('protests', this)">📢</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('politics', this)">📜</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('sports', this)">⚽</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('tech-business', this)">💼</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('finance', this)">💰</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('health', this)">🏥</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('energy', this)">⚡</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('transport', this)">🚌</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('maritime', this)">🚢</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('infrastructure', this)">🏗️</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('science', this)">🎓</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('wildlife', this)">🐾</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('culture', this)">🎨</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('crime', this)">⚖️</button>
-                <button type="button" class="emoji-btn" onclick="selectEmoji('violent-crime', this)" title="Violent Crime">🔪</button>
+            <label for="categorySlug">Category</label>
+            <select id="categorySlug" class="category-select" style="width: 100%; margin-top: 4px;" onchange="selectCategory(this.value)">
+                <option value="general">📰 General News</option>
+                <option value="breaking">🔴 Breaking News</option>
+                <option value="collisions">💥 Collisions & Accidents</option>
+                <option value="landslides">⛰️ Rockslides & Landslides</option>
+                <option value="fires">🔥 Fires & Wildfires</option>
+                <option value="hazards">⚠️ General Hazard & Warning</option>
+                <option value="nuclear">☢️ Nuclear & Radiation</option>
+                <option value="biological-hazard">☣️ Biological Hazard</option>
+                <option value="winds">💨 High Winds & Gales</option>
+                <option value="tornadoes">🌪️ Tornadoes & Severe Storms</option>
+                <option value="thunderstorms">🌩️ Severe Thunderstorm</option>
+                <option value="blizzards">❄️ Extreme Cold & Blizzards</option>
+                <option value="floods">🌊 Floods & Waves</option>
+                <option value="heatwaves">☀️ Extreme Heatwave</option>
+                <option value="volcanic">🌋 Volcanic Activity</option>
+                <option value="drones">🛸 Drone Sightings & UAV</option>
+                <option value="military">🎖️ Military Operations</option>
+                <option value="missiles">🚀 Missile & Air Activity</option>
+                <option value="conflict">⚔️ Conflict & Defense</option>
+                <option value="cyber">💻 Cyberattacks & IT Outages</option>
+                <option value="protests">📢 Protests & Rallies</option>
+                <option value="politics">📜 Politics</option>
+                <option value="sports">⚽ Sports</option>
+                <option value="tech-business">💼 Tech & Business</option>
+                <option value="finance">💰 Finance & Economy</option>
+                <option value="health">🏥 Public Health</option>
+                <option value="energy">⚡ Energy & Power</option>
+                <option value="transport">🚌 Public Transport & Travel</option>
+                <option value="maritime">🚢 Maritime & Shipping</option>
+                <option value="infrastructure">🏗️ Infrastructure & Construction</option>
+                <option value="science">🎓 Education & Science</option>
+                <option value="wildlife">🐾 Wildlife & Environment</option>
+                <option value="culture">🎨 Culture & Arts</option>
+                <option value="crime">⚖️ Crime & Legal</option>
+                <option value="violent-crime">🗡️ Violent Crime</option>
+            </select>
+            <div class="category-name-badge" id="categoryNameBadge"></div>
+
+            <label id="emojiGridLabel">Map Marker Emoji</label>
+            <div id="emojiGrid" class="emoji-grid" role="group" aria-labelledby="emojiGridLabel">
+                <div id="defaultEmojiGroup" class="emoji-group" role="group" aria-labelledby="defaultEmojiLabel">
+                    <span id="defaultEmojiLabel" class="emoji-group-title">Category defaults</span>
+                </div>
+                <div id="extraEmojiGroup" class="emoji-group emoji-extra-group" role="group" aria-labelledby="extraEmojiLabel">
+                    <span id="extraEmojiLabel" class="emoji-group-title">Additional markers</span>
+                </div>
             </div>
-            <div class="category-name-badge" id="categoryNameBadge">Category: 📰 General News</div>
-            <input type="hidden" id="categorySlug" value="general">
+            <input type="hidden" id="articleEmoji" value="📰">
 
             <!-- CASUALTY COUNT FIELDS -->
             <div style="display: flex; gap: 12px; margin-top: 8px;">
@@ -841,7 +879,6 @@
                 <input type="date" id="updateDate" style="flex: 1;">
                 <input type="time" id="updateTime" value="12:00" style="width: 100px;" step="60">
                 <span id="updateTimezone" style="font-size: 11px; color: #94a3b8; white-space: nowrap;">Europe/Oslo</span>
-            </div>
             </div>
 
             <input type="hidden" id="parentArticleId">
@@ -947,6 +984,8 @@
             'landslides':     { emoji: '⛰️', name: 'Rockslides & Landslides' },
             'fires':          { emoji: '🔥', name: 'Fires & Wildfires' },
             'hazards':        { emoji: '⚠️', name: 'General Hazard & Warning' },
+            'nuclear':        { emoji: '☢️', name: 'Nuclear & Radiation' },
+            'biological-hazard': { emoji: '☣️', name: 'Biological Hazard' },
             'winds':          { emoji: '💨', name: 'High Winds & Gales' },
             'tornadoes':      { emoji: '🌪️', name: 'Tornadoes & Severe Storms' },
             'thunderstorms':  { emoji: '🌩️', name: 'Severe Thunderstorm' },
@@ -973,15 +1012,43 @@
             'wildlife':       { emoji: '🐾', name: 'Wildlife & Environment' },
             'culture':        { emoji: '🎨', name: 'Culture & Arts' },
             'crime':          { emoji: '⚖️', name: 'Crime & Legal' },
-            'violent-crime':  { emoji: '🔪', name: 'Violent Crime' }
+            'violent-crime':  { emoji: '🗡️', name: 'Violent Crime' }
         };
 
-        const map = L.map('map').setView([64.5, 11.5], 5);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(map);
+        selectCategory('general');
+        selectEmoji('📰');
 
-        const markersCluster = L.markerClusterGroup();
+        // Populate emoji grid with all markers
+        Object.entries(CATEGORY_MAP).forEach(([slug, info]) => addEmojiButton(info.emoji, info.name, 'defaultEmojiGroup'));
+        [
+            ['🚲', 'Bicycle'], ['🏍️', 'Motorcycle'], ['🚗', 'Car'], ['🚙', 'SUV'],
+            ['🚚', 'Truck'], ['🚓', 'Police car'], ['👮', 'Police officer'],
+            ['🚨', 'Emergency'], ['🚑', 'Ambulance'], ['🚒', 'Fire engine'],
+            ['💀', 'Death / skull'], ['☠️', 'Skull and crossbones'],
+            ['⚰️', 'Coffin'], ['🔫', 'Gun'], ['🗡️', 'Knife']
+        ].forEach(([emoji, name]) => addEmojiButton(emoji, name, 'extraEmojiGroup'));
+
+        const map = L.map('map').setView([64.5, 11.5], 5);
+        const osmAttribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+        const TILE_PROVIDERS = {
+            osm: { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attribution: osmAttribution, maxNativeZoom: 19 },
+            light: { url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', attribution: osmAttribution + ' &copy; <a href="https://carto.com/attributions">CARTO</a>', subdomains: 'abcd', maxNativeZoom: 20 },
+            dark: { url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', attribution: osmAttribution + ' &copy; <a href="https://carto.com/attributions">CARTO</a>', subdomains: 'abcd', maxNativeZoom: 20 }
+        };
+        let activeTileLayer = null;
+        function changeMapStyle(style) {
+            if (!Object.prototype.hasOwnProperty.call(TILE_PROVIDERS, style)) style = 'osm';
+            const { url, ...options } = TILE_PROVIDERS[style];
+            if (activeTileLayer) map.removeLayer(activeTileLayer);
+            activeTileLayer = L.tileLayer(url, { ...options, maxZoom: 20 }).addTo(map);
+            document.getElementById('mapStyle').value = style;
+            try { localStorage.setItem('geonews-map-style', style); } catch (e) {}
+        }
+        let initialMapStyle = 'osm';
+        try { initialMapStyle = localStorage.getItem('geonews-map-style') || 'osm'; } catch (e) {}
+        changeMapStyle(initialMapStyle);
+
+        const markersCluster = L.markerClusterGroup({ maxClusterRadius: 50 });
         map.addLayer(markersCluster);
 
         function parseUrlParams() {
@@ -1067,6 +1134,7 @@
                     currentUser = data.user;
                     authBar.innerHTML = `
                         <div class="user-badge">👤 <strong>${currentUser.username}</strong></div>
+                        ${currentUser.role === 'admin' ? '<a href="bulk-update.html">Bulk update</a>' : ''}
                         <button class="btn-logout" onclick="logout()">Logout</button>
                     `;
                 } else {
@@ -1140,15 +1208,39 @@
             document.getElementById('articleKilled').value = '';
         }
 
-        function selectEmoji(slug, btn) {
-            const categoryInfo = CATEGORY_MAP[slug];
-            if (!categoryInfo) return;
+        function selectCategory(slug) {
+            const categoryInfo = CATEGORY_MAP[slug] || CATEGORY_MAP.general;
+            document.getElementById('categorySlug').value = CATEGORY_MAP[slug] ? slug : 'general';
+            document.getElementById('categoryNameBadge').textContent = categoryInfo.name;
+            selectEmoji(categoryInfo.emoji);
+        }
 
-            document.querySelectorAll('.emoji-btn').forEach(b => b.classList.remove('active'));
-            if(btn) btn.classList.add('active');
+        function addEmojiButton(emoji, name, groupId = 'extraEmojiGroup') {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'emoji-btn';
+            button.dataset.emoji = emoji;
+            button.textContent = emoji;
+            button.title = name;
+            button.setAttribute('aria-label', name);
+            button.setAttribute('aria-pressed', 'false');
+            button.onclick = () => selectEmoji(emoji);
+            document.getElementById(groupId).appendChild(button);
+        }
 
-            document.getElementById('categorySlug').value = slug;
-            document.getElementById('categoryNameBadge').innerText = `Category: ${categoryInfo.emoji} ${categoryInfo.name}`;
+        function selectEmoji(emoji) {
+            emoji = emoji || '📰';
+            if (!Array.from(document.querySelectorAll('#emojiGrid .emoji-btn')).some(button => button.dataset.emoji === emoji)) {
+                addEmojiButton(emoji, 'Marker');
+            }
+            document.querySelectorAll('#emojiGrid .emoji-btn').forEach(button => {
+                const selected = button.dataset.emoji === emoji;
+                button.classList.toggle('active', selected);
+                button.setAttribute('aria-pressed', String(selected));
+            });
+            document.getElementById('articleEmoji').value = emoji;
+            const badge = document.getElementById('emojiNameBadge');
+            if (badge) badge.textContent = emoji;
         }
 
         function openAddModal(lat, lng) {
@@ -1164,7 +1256,8 @@
             clearModalInputs();
             
             document.getElementById('diffReviewBox').style.display = 'none';
-            selectEmoji('general');
+            selectCategory('general');
+            selectEmoji('📰');
             document.getElementById('articleModal').style.display = 'flex';
         }
 
@@ -1191,9 +1284,8 @@
 
             document.getElementById('diffReviewBox').style.display = 'none';
 
-            const targetSlug = item.category_slug || 'general';
-            const targetBtn = Array.from(document.querySelectorAll('.emoji-btn')).find(b => b.innerText.trim() === item.emoji);
-            selectEmoji(targetSlug, targetBtn);
+            selectCategory(item.category_slug || 'general');
+            selectEmoji(item.emoji);
 
             document.getElementById('articleModal').style.display = 'flex';
         }
@@ -1228,11 +1320,8 @@
                     if (data.killed !== null && data.killed !== undefined) document.getElementById('articleKilled').value = data.killed;
 
                     if (data.category_slug) {
-                        const targetBtn = Array.from(document.querySelectorAll('.emoji-btn')).find(b => {
-                            const mappedInfo = CATEGORY_MAP[data.category_slug];
-                            return mappedInfo && b.innerText.trim() === mappedInfo.emoji;
-                        });
-                        selectEmoji(data.category_slug, targetBtn);
+                        // Metadata suggestions don't overwrite a manually chosen marker.
+                        selectCategory(data.category_slug, false);
                     }
 
                     if (data.suggested_place) {
@@ -1367,9 +1456,8 @@
                 document.getElementById('articleLng').value = lng;
                 document.getElementById('coordDisplay').innerText = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
 
-                const targetSlug = item.category_slug || 'general';
-                const targetBtn = Array.from(document.querySelectorAll('.emoji-btn')).find(b => b.innerText.trim() === item.emoji);
-                selectEmoji(targetSlug, targetBtn);
+                selectCategory(freshData.category_slug || item.category_slug || 'general');
+                selectEmoji(item.emoji);
 
                 document.getElementById('articleModal').style.display = 'flex';
 
@@ -1385,6 +1473,7 @@
             
             if (inputField) {
                 inputField.value = oldVal;
+                if (fieldId === 'categorySlug') selectCategory(oldVal, false);
                 
                 btn.innerText = '✓ Using Old';
                 btn.classList.add('active');
@@ -1432,6 +1521,7 @@
                 url: document.getElementById('articleUrl').value,
                 image_url: document.getElementById('articleImage').value,
                 category_slug: document.getElementById('categorySlug').value || 'general',
+                emoji: document.getElementById('articleEmoji').value || '📰',
                 latitude: parseFloat(document.getElementById('articleLat').value),
                 longitude: parseFloat(document.getElementById('articleLng').value),
                 injured_count: parseInt(document.getElementById('articleInjured').value || 0),
@@ -1741,8 +1831,10 @@
                 firstDate = month.toISOString().slice(0, 10);
                 days = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() + 1, 0)).getUTCDate();
             } else {
-                const lastDate = shiftCalendarDate(osloParts(base).date, bottomTimelinePeriodOffset * 7);
-                firstDate = shiftCalendarDate(lastDate, -6);
+                const baseDate = osloParts(base).date;
+                const weekday = new Date(baseDate + 'T12:00:00Z').getUTCDay();
+                const daysSinceMonday = (weekday + 6) % 7;
+                firstDate = shiftCalendarDate(baseDate, -daysSinceMonday + bottomTimelinePeriodOffset * 7);
                 days = 7;
             }
             const boundaries = Array.from({ length: days + 1 }, (_, i) => parsePublishDate(shiftCalendarDate(firstDate, i)));
@@ -1992,6 +2084,16 @@
                 dot.classList.toggle('active', dot.dataset.incidentId === selectedTimelineIncidentId);
             });
         }
+
+        fetch('build-date.json', { cache: 'no-store' })
+            .then(response => response.ok ? response.json() : null)
+            .then(data => {
+                if (data && /^\d{4}-\d{2}-\d{2}$/.test(data.built_date)) {
+                    const label = document.getElementById('builtDate');
+                    label.textContent = `Built: ${data.built_date}`;
+                    label.hidden = false;
+                }
+            }).catch(() => {});
 
         parseUrlParams();
         initDateRange();

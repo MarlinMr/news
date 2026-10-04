@@ -15,8 +15,10 @@ jobs:
       - name: 📦 Prepare Deployment Files
         run: |
           mkdir -p deploy_dist
-          cp index.html deploy_dist/
+          cp index.html bulk-update.html deploy_dist/
           cp -r api deploy_dist/
+          cp -r docs deploy_dist/
+          printf '{"built_date":"%s"}\n' "$(TZ=Europe/Oslo date +%F)" > deploy_dist/build-date.json
           # Ensure server's live database config is not overwritten
           rm -f deploy_dist/api/db.php deploy_dist/api/db.php.example deploy_dist/api/config.php
 

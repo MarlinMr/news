@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Refresh incidents — GeoNews</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; background: #0f172a; color: #f8fafc; font: 14px system-ui, sans-serif; }
+        header, main { max-width: 1200px; margin: auto; padding: 20px; }
+        header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+        h1 { font-size: 24px; } h2 { font-size: 18px; }
+        a { color: #7dd3fc; overflow-wrap: anywhere; }
+        section, article { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+        p { color: #cbd5e1; line-height: 1.5; }
+        fieldset { border: 1px solid #475569; border-radius: 6px; margin: 12px 0; }
+        .options, .actions { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+        label { cursor: pointer; } input { accent-color: #3b82f6; }
+        button { background: #2563eb; color: white; border: 1px solid #60a5fa; padding: 8px 12px; border-radius: 5px; cursor: pointer; }
+        button:disabled { opacity: .45; cursor: default; }
+        button.secondary { background: #334155; border-color: #64748b; }
+        progress { width: 100%; margin-top: 12px; }
+        .article-row { border-top: 1px solid #475569; padding: 12px 0; }
+        .timeline { margin-left: 24px; }
+        .status { color: #cbd5e1; margin: 8px 0; }
+        .error { color: #fca5a5; }
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+        th, td { text-align: left; padding: 10px; border-bottom: 1px solid #475569; vertical-align: top; overflow-wrap: anywhere; }
+        td.value { min-width: 180px; max-width: 400px; white-space: pre-wrap; }
+        .old { color: #fca5a5; } .new { color: #86efac; }
+        [hidden] { display: none !important; }
+    </style>
+</head>
+<body>
+<header><h1>📰 Refresh incidents</h1><a href="index.html">Back to map / sign in</a></header>
+<main>
+    <p id="access" role="status">Checking admin access…</p>
+    <div id="workspace" hidden>
+        <section>
+            <h2>Refresh data from each article’s own URL</h2>
+            <p>All incidents are listed below, regardless of date. Choose incidents, master articles and/or timeline articles, then choose the information to refresh. Scanning only proposes changes; save after reviewing.</p>
+            <fieldset id="scope"><legend>Articles to refresh within selected incidents</legend><div class="options">
+                <label><input id="masters" type="checkbox" checked> Master articles</label>
+                <label><input id="timelines" type="checkbox" checked> Timeline articles</label>
+            </div></fieldset>
+            <fieldset id="fields"><legend>Information to refresh</legend><div class="options" id="fieldOptions"></div></fieldset>
+            <p>Timeline articles support title, publication date and time. Category and casualty counts are inferred from headline/summary text. Missing metadata keeps the stored value.</p>
+            <div class="actions">
+                <button id="scan" disabled>Scan selected articles</button>
+                <button id="stop" class="secondary" disabled>Stop after current article</button>
+                <button id="apply" disabled>Apply selected changes</button>
+            </div>
+            <progress id="progress" value="0" max="1"></progress>
+            <p id="progressText" role="status" aria-live="polite">Loading incidents…</p>
+        </section>
+        <section>
+            <h2>Incidents and change review</h2>
+            <div class="actions">
+                <button id="selectIncidents" class="secondary">Select all incidents</button>
+                <button id="clearIncidents" class="secondary">Deselect all incidents</button>
+                <button id="selectChanges" class="secondary">Select all changes</button>
+                <button id="clearChanges" class="secondary">Deselect all changes</button>
+            </div>
+            <div id="incidents"></div>
+        </section>
+    </div>
+</main>
+<script>
+    const labels = {title:'Title',summary:'Summary',image:'Image URL',date:'Publication date (Europe/Oslo)',time:'Publication time (Europe/Oslo)',category:'Category',injured:'Injured count',killed:'Killed count'};
+    const $ = id => document.getElementById(id);
+    const records = [];
+    let busy = false, stopRequested = false;
+    function node(tag, text, className) {
+        const el = document.createElement(tag);
+        if (text !== undefined) el.textContent = text;
+        if (className) el.className = className;
+        return el;
+    }
+    async function request(payload) {
+        const response = await fetch('api/bulk-update.php', payload ? {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)} : {cache:'no-store'});
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Request failed');
+        return data;
+    }
+    function updateButtons() {
+        $('scan').disabled = busy || !records.length;
+        $('apply').disabled = busy || !records.some(r => r.changes.some(c => c.check.checked && !c.check.disabled));
+        $('stop').disabled = !busy;
+        document.querySelectorAll('#scope input, #fields input, .incident-check, .selection, .change-check').forEach(el => el.disabled = busy || el.dataset.saved === 'true');
+        ['selectIncidents','clearIncidents','selectChanges','clearChanges'].forEach(id => $(id).disabled = busy);
+    }
+    function addRecord(parent, item, type, incidentCheck) {
+        const container = node('div',undefined,'article-row' + (type === 'update' ? ' timeline' : ''));
+        const label = node('label');
+        const selection = node('input'); selection.type = 'checkbox'; selection.checked = true; selection.className = 'selection';
+        label.append(selection, document.createTextNode(` ${type === 'master' ? 'Master' : 'Timeline'} #${item.id}: ${item.title}`));
+        container.append(label);
+        const link = node('a', item.url || 'No URL stored');
+        if (/^https?:\/\//i.test(item.url || '')) { link.href = item.url; link.target = '_blank'; link.rel = 'noopener'; }
+        const urlLine = node('p'); urlLine.append(link); container.append(urlLine);
+        const status = node('p','Not scanned','status');
+        const review = node('div',undefined,'table-wrap');
+        container.append(status,review); parent.append(container);
+        records.push({id:item.id,type,url:item.url,selection,incidentCheck,status,review,changes:[]});
+    }
+    function renderReview(record, result) {
+        record.changes = [];
+        record.review.replaceChildren();
+        record.url = result.url;
+        record.status.className = 'status';
+        record.status.textContent = result.changes.length ? `${result.changes.length} field(s) changed` : 'No changes found';
+        if (result.unavailable.length) record.status.textContent += ' · Unavailable (stored values kept): ' + result.unavailable.map(f=>labels[f]).join(', ');
+        if (!result.changes.length) return;
+        const table = node('table'); const head = node('tr');
+        ['Apply','Field','Stored value','Fetched value'].forEach(text=>head.append(node('th',text)));
+        const thead = node('thead'); thead.append(head); table.append(thead);
+        const tbody = node('tbody'); table.append(tbody);
+        result.changes.forEach(change => {
+            const row = node('tr'); const cell = node('td'); const check = node('input');
+            check.type = 'checkbox'; check.checked = true; check.className = 'change-check'; check.setAttribute('aria-label',`Apply ${labels[change.field]} for ${record.type} ${record.id}`);
+            check.onchange = updateButtons; cell.append(check);
+            row.append(cell,node('td',labels[change.field]),node('td',change.old === null || change.old === '' ? '(empty)' : String(change.old),'value old'),node('td',String(change.new),'value new'));
+            tbody.append(row); record.changes.push({...change,check});
+        });
+        record.review.append(table);
+    }
+    $('scan').onclick = async () => {
+        const fields = [...document.querySelectorAll('#fields input:checked')].map(el=>el.value);
+        const jobs = records.filter(r=>r.incidentCheck.checked && r.selection.checked && (r.type === 'master' ? $('masters').checked : $('timelines').checked))
+            .map(r=>({record:r,fields:r.type === 'master' ? fields : fields.filter(f=>['title','date','time'].includes(f))})).filter(job=>job.fields.length);
+        if (!fields.length || !jobs.length) { $('progressText').textContent = 'Select information and articles to scan.'; return; }
+        records.forEach(r=>{ r.changes=[]; r.review.replaceChildren(); r.status.textContent='Not selected for this scan'; r.status.className='status'; });
+        jobs.forEach(job=>job.record.status.textContent='Waiting to scan');
+        busy = true; stopRequested = false; updateButtons();
+        $('progress').max=jobs.length; $('progress').value=0;
+        let failed=0, changed=0;
+        try {
+            for (const job of jobs) {
+                if (stopRequested) break;
+                const r = job.record; r.status.textContent='Fetching metadata…';
+                $('progressText').textContent=`Scanning ${$('progress').value + 1}/${jobs.length}: ${r.type} #${r.id}`;
+                try {
+                    const result=await request({action:'preview',type:r.type,id:r.id,fields:job.fields});
+                    renderReview(r,result); if(result.changes.length) changed++;
+                } catch(e) { failed++; r.status.textContent=e.message; r.status.className='status error'; }
+                $('progress').value++;
+            }
+            $('progressText').textContent=`${stopRequested ? 'Stopped' : 'Scan complete'}: ${$('progress').value}/${jobs.length} scanned, ${changed} with changes, ${failed} failed. Review below before applying.`;
+        } finally { busy=false; updateButtons(); }
+    };
+    $('stop').onclick=()=>{stopRequested=true; $('stop').disabled=true;};
+    $('apply').onclick=async()=>{
+        const jobs=records.map(r=>({record:r,changes:r.changes.filter(c=>c.check.checked && !c.check.disabled).map(({field,old,new:value})=>({field,old,new:value}))})).filter(job=>job.changes.length);
+        if (!jobs.length) return;
+        busy=true; stopRequested=false; updateButtons(); $('progress').max=jobs.length; $('progress').value=0;
+        let saved=0,failed=0;
+        try {
+            for(const job of jobs) {
+                if(stopRequested) break;
+                const r=job.record;
+                $('progressText').textContent=`Saving ${r.type} #${r.id}…`;
+                try {
+                    await request({action:'apply',type:r.type,id:r.id,url:r.url,fields:job.changes.map(c=>c.field),changes:job.changes});
+                    saved++; r.status.textContent='Selected changes saved'; r.status.className='status';
+                    r.changes.forEach(c=>{if(job.changes.some(change=>change.field===c.field)){c.check.checked=false;c.check.dataset.saved='true';}});
+                } catch(e) {failed++;r.status.textContent=e.message;r.status.className='status error';}
+                $('progress').value++;
+            }
+            $('progressText').textContent=`${stopRequested?'Stopped':'Apply complete'}: ${saved} articles saved, ${failed} failed. Results remain below.`;
+        } finally {busy=false;updateButtons();}
+    };
+    function selectAll(selector,checked) {document.querySelectorAll(selector).forEach(el=>{if(!el.disabled) el.checked=checked;});updateButtons();}
+    $('selectIncidents').onclick=()=>selectAll('.incident-check, .selection',true);
+    $('clearIncidents').onclick=()=>selectAll('.incident-check, .selection',false);
+    $('selectChanges').onclick=()=>selectAll('.change-check',true);
+    $('clearChanges').onclick=()=>selectAll('.change-check',false);
+    Object.entries(labels).forEach(([field,text])=>{const label=node('label');const cb=node('input');cb.type='checkbox';cb.value=field;cb.checked=true;label.append(cb,document.createTextNode(' '+text));$('fieldOptions').append(label);});
+    (async()=>{
+        try {
+            const data=await request(); $('access').textContent='Admin access confirmed'; $('workspace').hidden=false;
+            const updatesByIncident=new Map();
+            data.updates.forEach(u=>{const key=String(u.article_id);if(!updatesByIncident.has(key))updatesByIncident.set(key,[]);updatesByIncident.get(key).push(u);});
+            data.incidents.forEach(incident=>{
+                const card=node('article'); const h=node('h2'); const label=node('label');const check=node('input');check.type='checkbox';check.checked=true;check.className='incident-check';
+                label.append(check,document.createTextNode(` Incident #${incident.id}: ${incident.title}`));h.append(label);card.append(h);
+                addRecord(card,incident,'master',check);
+                (updatesByIncident.get(String(incident.id)) || []).forEach(update=>addRecord(card,update,'update',check));
+                $('incidents').append(card);
+            });
+            $('progressText').textContent=`${data.incidents.length} incidents, ${records.length} articles loaded. All selected.`; updateButtons();
+        } catch(e) {$('access').textContent=e.message; $('access').className='error';}
+    })();
+</script>
+</body>
+</html>
