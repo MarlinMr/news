@@ -12,23 +12,31 @@ jobs:
       - name: 🚚 Checkout Latest Code
         uses: actions/checkout@v4
 
-      - name: 📂 Deploy via rsync over SSH
-        env:
-          SSHPASS: ${{ secrets.ONECOM_SFTP_PASSWORD }}
-          HOST: ${{ secrets.ONECOM_SFTP_HOST }}
-          USER: ${{ secrets.ONECOM_SFTP_USER }}
+      - name: 📦 Prepare Deployment Files
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y sshpass rsync
-          sshpass -e rsync -avz \
-            -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -q" \
-            --exclude '.git*' \
-            --exclude 'docker/' \
-            --exclude 'Dockerfile' \
-            --exclude 'docker-compose.yml' \
-            --exclude 'GEMINI.md' \
-            --exclude 'test.html' \
-            --exclude 'api/db.php' \
-            --exclude 'api/db.php.example' \
-            --exclude 'api/config.php' \
-            --exclude '.env*' \
-            ./ "$USER"@"$HOST":webroots/www/news/
+          mkdir -p deploy_dist
+          cp index.html deploy_dist/
+          cp -r api deploy_dist/
+          # Ensure server's live database config is not overwritten
+          rm -f deploy_dist/api/db.php deploy_dist/api/db.php.example deploy_dist/api/config.php
+
+      - name: 🚀 Deploy via SCP
+        env:
+          SSH_KEY: ${{ secrets.SSH_KEY || secrets.ONECOM_SSH_KEY }}
+          SSH_HOST: ${{ secrets.SSH_HOST || secrets.ONECOM_SFTP_HOST }}
+          SSH_USERNAME: ${{ secrets.SSH_USERNAME || secrets.ONECOM_SFTP_USER }}
+          FILE_DIR: "webroots/www/news"
+        run: |
+          # Handle both base64-encoded and raw OpenSSH private keys
+          if echo "$SSH_KEY" | grep -q "PRIVATE KEY"; then
+            echo "$SSH_KEY" > ssh_key
+          else
+            echo "$SSH_KEY" | base64 -d > ssh_key
+          fi
+          chmod 600 ssh_key
+
+          # Ensure target directory structure exists
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ssh_key "$SSH_USERNAME@$SSH_HOST" "mkdir -p $FILE_DIR/api"
+
+          # Deploy files using legacy SCP (-O) compatible with one.com
+          scp -O -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ssh_key -r deploy_dist/* "$SSH_USERNAME@$SSH_HOST:$FILE_DIR/"
