@@ -610,8 +610,7 @@
                 <label for="mapStyle">Map style</label>
                 <select id="mapStyle" class="category-select" onchange="changeMapStyle(this.value)">
                     <option value="osm">OpenStreetMap</option>
-                    <option value="light">CARTO Light</option>
-                    <option value="dark">CARTO Dark</option>
+                    <option value="kartverket">Kartverket</option>
                 </select>
             </div>
             <div class="search-box" id="searchBox">
@@ -1029,8 +1028,7 @@
         const osmAttribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
         const TILE_PROVIDERS = {
             osm: { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attribution: osmAttribution, maxNativeZoom: 19 },
-            light: { url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', attribution: osmAttribution + ' &copy; <a href="https://carto.com/attributions">CARTO</a>', subdomains: 'abcd', maxNativeZoom: 20 },
-            dark: { url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', attribution: osmAttribution + ' &copy; <a href="https://carto.com/attributions">CARTO</a>', subdomains: 'abcd', maxNativeZoom: 20 }
+            kartverket: { url: 'https://cache.kartverket.no/tiles/graatpoly/{z}/{x}/{y}.png', attribution: osmAttribution + ' &copy; <a href="https://kartverket.no">Kartverket</a>', maxNativeZoom: 19 }
         };
         let activeTileLayer = null;
         function changeMapStyle(style) {
