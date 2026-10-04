@@ -13,8 +13,6 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
 
-    <!-- noUiSlider CSS -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css" />
 
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
@@ -100,7 +98,9 @@
             padding: 6px 12px; 
             border-radius: 6px; 
             border: 1px solid #334155;
-            width: 680px;
+            width: auto;
+            max-width: 100%;
+            flex-wrap: wrap;
             flex-shrink: 0;
         }
 
@@ -121,32 +121,6 @@
             background: #3b82f6;
             color: #ffffff;
             border-color: #3b82f6;
-        }
-
-        .slider-wrapper { flex: 1; padding: 0 4px; }
-
-        /* noUiSlider Styling */
-        .noUi-target { background: #334155; border: none; height: 6px; border-radius: 3px; }
-        .noUi-connect { background: #3b82f6; }
-        .noUi-handle {
-            border: 2px solid #3b82f6;
-            border-radius: 50%;
-            background: #ffffff;
-            cursor: pointer;
-            width: 16px !important;
-            height: 16px !important;
-            right: -8px !important;
-            top: -5px !important;
-        }
-        .noUi-handle:before, .noUi-handle:after { display: none; }
-
-        @media (min-width: 851px) {
-            .noUi-handle {
-                width: 20px !important;
-                height: 20px !important;
-                right: -10px !important;
-                top: -7px !important;
-            }
         }
 
         .date-pickers { display: flex; align-items: center; gap: 4px; }
@@ -336,7 +310,6 @@
             .timeline-container .category-select { width: 100%; min-width: 0; }
             .preset-group { width: 100%; justify-content: space-between; }
             .btn-preset { flex: 1; text-align: center; }
-            .slider-wrapper { width: 100%; padding: 4px 6px; }
             .date-pickers { width: 100%; justify-content: space-between; }
             .date-pickers input[type="date"] { flex: 1; width: 45%; font-size: 11px; padding: 4px; }
 
@@ -386,6 +359,7 @@
 
         .timeline-title-group {
             display: flex;
+            flex-wrap: wrap;
             align-items: center;
             gap: 8px;
             font-weight: 600;
@@ -463,7 +437,7 @@
 
         .timeline-track-wrapper {
             position: relative;
-            height: 48px;
+            height: 88px;
             margin-top: 10px;
             margin-bottom: 2px;
             padding: 0 12px;
@@ -490,6 +464,7 @@
 
         .timeline-day-tick {
             position: absolute;
+            top: 38px;
             transform: translateX(-50%);
             display: flex;
             flex-direction: column;
@@ -515,6 +490,12 @@
             color: #38bdf8;
             font-weight: 700;
         }
+
+        .timeline-boundary { position: absolute; top: 5px; height: 30px; border-left: 1px solid #64748b; }
+        .timeline-boundary.first, .timeline-boundary.last { border-color: #e2e8f0; border-left-width: 2px; }
+        .timeline-boundary span { position: absolute; top: 58px; color: #cbd5e1; font-size: 10px; white-space: nowrap; }
+        .timeline-boundary.first span { left: 0; }
+        .timeline-boundary.last span { right: 0; }
 
         .timeline-dots-layer {
             position: absolute;
@@ -666,6 +647,7 @@
                 <option value="🐾" data-slug="wildlife">🐾 Wildlife & Environment</option>
                 <option value="🎨" data-slug="culture">🎨 Culture & Arts</option>
                 <option value="⚖️" data-slug="crime">⚖️ Crime & Legal</option>
+                <option value="🔪" data-slug="violent-crime">🔪 Violent Crime</option>
             </select>
 
             <div class="preset-group">
@@ -676,16 +658,12 @@
                 <button type="button" class="btn-preset" onclick="applyPreset(365, event)">ALL</button>
             </div>
 
-            <div class="slider-wrapper">
-                <div id="dualDateSlider"></div>
-            </div>
-
             <div class="date-pickers">
                 <label for="startDate" class="sr-only">Start Date</label>
-                <input type="date" id="startDate" onchange="syncInputToSlider()">
+                <input type="date" id="startDate" onchange="handleDateRangeChange()">
                 <span style="color: #64748b;" aria-hidden="true">-</span>
                 <label for="endDate" class="sr-only">End Date</label>
-                <input type="date" id="endDate" onchange="syncInputToSlider()">
+                <input type="date" id="endDate" onchange="handleDateRangeChange()">
             </div>
         </div>
     </header>
@@ -705,19 +683,24 @@
 
         <button class="sidebar-toggle-btn" id="sidebarToggleBtn" onclick="toggleSidebar()">▶</button>
 
-        <!-- BOTTOM 1-WEEK TIMELINE BAR -->
+        <!-- INCIDENT TIMELINE BAR -->
         <div id="bottomTimeline" class="bottom-timeline">
             <div class="bottom-timeline-header">
                 <div class="timeline-title-group">
                     <span class="timeline-icon">⏱️</span>
-                    <span class="timeline-title">7-Day Incident Track</span>
+                    <span class="timeline-title">Incident Track</span>
+                    <label for="bottomTimelineView" class="sr-only">Timeline view</label>
+                    <select id="bottomTimelineView" class="category-select" onchange="changeBottomTimelineView(this.value)">
+                        <option value="week">Week view</option>
+                        <option value="month">Month view</option>
+                    </select>
                     <span class="timeline-date-range" id="bottomTimelineRange">--</span>
                     <span class="timeline-count-badge" id="bottomTimelineCount">0 events</span>
                 </div>
                 <div class="bottom-timeline-nav">
-                    <button type="button" class="btn-timeline-nav" onclick="shiftBottomTimelineWeek(-1)" title="Previous 7 days">◀ Prev Week</button>
-                    <button type="button" class="btn-timeline-nav" onclick="resetBottomTimelineWeek()" title="Reset to current week">Current Week</button>
-                    <button type="button" class="btn-timeline-nav" onclick="shiftBottomTimelineWeek(1)" title="Next 7 days">Next Week ▶</button>
+                    <button type="button" id="timelinePrev" class="btn-timeline-nav" onclick="shiftBottomTimelinePeriod(-1)" title="Previous 7 days">◀ Prev Week</button>
+                    <button type="button" id="timelineCurrent" class="btn-timeline-nav" onclick="resetBottomTimelinePeriod()" title="Reset to current week">Current Week</button>
+                    <button type="button" id="timelineNext" class="btn-timeline-nav" onclick="shiftBottomTimelinePeriod(1)" title="Next 7 days">Next Week ▶</button>
                     <button type="button" class="btn-timeline-toggle" onclick="toggleBottomTimeline()" id="btnToggleTimeline" title="Minimize / Expand Timeline">▾</button>
                 </div>
             </div>
@@ -795,6 +778,7 @@
                 <button type="button" class="emoji-btn" onclick="selectEmoji('wildlife', this)">🐾</button>
                 <button type="button" class="emoji-btn" onclick="selectEmoji('culture', this)">🎨</button>
                 <button type="button" class="emoji-btn" onclick="selectEmoji('crime', this)">⚖️</button>
+                <button type="button" class="emoji-btn" onclick="selectEmoji('violent-crime', this)" title="Violent Crime">🔪</button>
             </div>
             <div class="category-name-badge" id="categoryNameBadge">Category: 📰 General News</div>
             <input type="hidden" id="categorySlug" value="general">
@@ -900,14 +884,59 @@
     <!-- JS Libraries -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-    <script src="https://unpkg.com/noUiSlider@15.7.1/dist/nouislider.min.js"></script>
 
     <script>
+        const APP_TIMEZONE = 'Europe/Oslo';
+        function osloParts(date = new Date()) {
+            const parts = new Intl.DateTimeFormat('en-GB', {
+                timeZone: APP_TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+            }).formatToParts(date);
+            const p = Object.fromEntries(parts.map(part => [part.type, part.value]));
+            return { date: `${p.year}-${p.month}-${p.day}`, time: `${p.hour}:${p.minute}`, seconds: p.second };
+        }
+        // Database DATETIME values are Oslo wall-clock times, not browser-local times.
+        function parsePublishDate(value) {
+            const text = String(value).replace(' ', 'T');
+            if (/(Z|[+-]\d{2}:?\d{2})$/i.test(text)) return new Date(text);
+            const target = Date.parse(text.length === 10 ? text + 'T00:00:00Z' : text + 'Z');
+            let instant = target;
+            for (let i = 0; i < 3; i++) {
+                const p = osloParts(new Date(instant));
+                const wall = Date.parse(`${p.date}T${p.time}:${p.seconds}Z`);
+                instant += target - wall;
+            }
+            return new Date(instant);
+        }
+        function shiftCalendarDate(date, days) {
+            const d = new Date(date + 'T12:00:00Z');
+            d.setUTCDate(d.getUTCDate() + days);
+            return d.toISOString().slice(0, 10);
+        }
+        function setPublishInputs(prefix, value) {
+            const p = osloParts(parsePublishDate(value));
+            document.getElementById(prefix + 'Date').value = p.date;
+            document.getElementById(prefix + 'Time').value = p.time;
+        }
+        function applyPublishMetadata(prefix, data) {
+            if (data.published_at) setPublishInputs(prefix, data.published_at);
+            else {
+                if (data.date) document.getElementById(prefix + 'Date').value = data.date.slice(0, 10);
+                if (data.time) document.getElementById(prefix + 'Time').value = data.time.slice(0, 5);
+            }
+            let hint = document.getElementById(prefix + 'TimeHint');
+            if (!hint) {
+                hint = document.createElement('p');
+                hint.id = prefix + 'TimeHint';
+                hint.style.cssText = 'font-size:12px;color:#64748b;margin-top:4px';
+                document.getElementById(prefix + 'Timezone').parentElement.after(hint);
+            }
+            hint.textContent = data.time ? 'Publication time from article metadata, shown in Europe/Oslo.' : 'No publication time found; current time value kept. Check it before saving.';
+        }
         let currentUser = null;
         let isRegisterMode = false;
         let articlesData = [];
         let markersMap = {};
-        let dualSlider = null;
         let initialTargetId = null;
         let detectedCoords = null;
 
@@ -943,7 +972,8 @@
             'science':        { emoji: '🎓', name: 'Education & Science' },
             'wildlife':       { emoji: '🐾', name: 'Wildlife & Environment' },
             'culture':        { emoji: '🎨', name: 'Culture & Arts' },
-            'crime':          { emoji: '⚖️', name: 'Crime & Legal' }
+            'crime':          { emoji: '⚖️', name: 'Crime & Legal' },
+            'violent-crime':  { emoji: '🔪', name: 'Violent Crime' }
         };
 
         const map = L.map('map').setView([64.5, 11.5], 5);
@@ -998,58 +1028,17 @@
             });
         }
 
-        function initDualSlider() {
-            const sliderElement = document.getElementById('dualDateSlider');
-            const now = new Date();
-            const maxDays = 365;
-            const defaultStartDaysAgo = 30;
-
-            noUiSlider.create(sliderElement, {
-                start: [maxDays - defaultStartDaysAgo, maxDays],
-                connect: true,
-                step: 1,
-                behaviour: 'tap-drag',
-                range: { 'min': 0, 'max': maxDays }
-            });
-
-            dualSlider = sliderElement.noUiSlider;
-
-            sliderElement.addEventListener('wheel', function (e) {
-                e.preventDefault();
-                const currentVals = dualSlider.get().map(Number);
-                const delta = e.deltaY < 0 ? 7 : -7;
-
-                dualSlider.set([currentVals[0] + delta, currentVals[1] + delta]);
-                fetchArticlesFromAPI();
-            }, { passive: false });
-
-            dualSlider.on('update', function (values) {
-                const startOffsetDays = maxDays - Math.round(values[0]);
-                const endOffsetDays = maxDays - Math.round(values[1]);
-
-                const startDate = new Date();
-                startDate.setDate(now.getDate() - startOffsetDays);
-
-                const endDate = new Date();
-                endDate.setDate(now.getDate() - endOffsetDays);
-
-                document.getElementById('startDate').value = startDate.toISOString().split('T')[0];
-                document.getElementById('endDate').value = endDate.toISOString().split('T')[0];
-
-                renderMarkers();
-            });
-
-            dualSlider.on('change', function () {
-                fetchArticlesFromAPI();
-            });
+        function initDateRange() {
+            const today = osloParts().date;
+            document.getElementById('startDate').value = shiftCalendarDate(today, -30);
+            document.getElementById('endDate').value = today;
         }
 
         function applyPreset(daysAgo, event) {
-            const maxDays = 365;
-            const startDiff = Math.min(daysAgo, maxDays);
-            const endDiff = 0;
-
-            dualSlider.set([maxDays - startDiff, maxDays - endDiff]);
+            const today = osloParts().date;
+            document.getElementById('startDate').value = shiftCalendarDate(today, -daysAgo);
+            document.getElementById('endDate').value = today;
+            document.getElementById('endDate').setCustomValidity('');
 
             document.querySelectorAll('.btn-preset').forEach(btn => btn.classList.remove('active'));
             if (event && event.target) {
@@ -1059,19 +1048,13 @@
             fetchArticlesFromAPI();
         }
 
-        function syncInputToSlider() {
-            const startVal = new Date(document.getElementById('startDate').value);
-            const endVal = new Date(document.getElementById('endDate').value);
-            const now = new Date();
-            const maxDays = 365;
-
-            if (!isNaN(startVal) && !isNaN(endVal)) {
-                const startDiff = Math.max(0, Math.round((now - startVal) / (1000 * 60 * 60 * 24)));
-                const endDiff = Math.max(0, Math.round((now - endVal) / (1000 * 60 * 60 * 24)));
-
-                dualSlider.set([maxDays - startDiff, maxDays - endDiff]);
-                fetchArticlesFromAPI();
-            }
+        function handleDateRangeChange() {
+            const start = document.getElementById('startDate');
+            const end = document.getElementById('endDate');
+            end.setCustomValidity(start.value && end.value && start.value > end.value ? 'End date must be on or after start date.' : '');
+            if (!start.value || !end.value || !end.reportValidity()) return;
+            document.querySelectorAll('.btn-preset').forEach(btn => btn.classList.remove('active'));
+            fetchArticlesFromAPI();
         }
 
         async function checkSession() {
@@ -1090,7 +1073,8 @@
                     currentUser = null;
                     authBar.innerHTML = `<button class="btn-login" onclick="openAuthModal()">Login / Register</button>`;
                 }
-            } catch (err) {}
+                renderMarkers();
+            } catch (err) { console.error('Session check failed:', err); }
         }
 
         function openAuthModal() { document.getElementById('authModal').style.display = 'flex'; }
@@ -1176,8 +1160,7 @@
             document.getElementById('suggestedLocBox').style.display = 'none';
 
             const now = new Date();
-            document.getElementById('articleDate').value = now.toISOString().split('T')[0];
-            document.getElementById('articleTime').value = now.toTimeString().slice(0, 5);
+            setPublishInputs('article', now.toISOString());
             clearModalInputs();
             
             document.getElementById('diffReviewBox').style.display = 'none';
@@ -1197,9 +1180,7 @@
             document.getElementById('articleImage').value = item.image_url || '';
             document.getElementById('articleInjured').value = item.injured_count || 0;
             document.getElementById('articleKilled').value = item.killed_count || 0;
-            const pubDate = new Date(item.published_at.replace(' ', 'T'));
-            document.getElementById('articleDate').value = pubDate.toISOString().split('T')[0];
-            document.getElementById('articleTime').value = pubDate.toTimeString().slice(0, 5);
+            setPublishInputs('article', item.published_at);
             
             const lat = parseFloat(item.latitude);
             const lng = parseFloat(item.longitude);
@@ -1228,8 +1209,7 @@
             document.getElementById('updateTitle').value = '';
             document.getElementById('updateSource').value = '';
             const now = new Date();
-            document.getElementById('updateDate').value = now.toISOString().split('T')[0];
-            document.getElementById('updateTime').value = now.toTimeString().slice(0, 5);
+            setPublishInputs('update', now.toISOString());
             document.getElementById('updateModal').style.display = 'flex';
         }
 
@@ -1242,12 +1222,7 @@
                     if (data.title) document.getElementById('articleTitle').value = data.title;
                     if (data.description) document.getElementById('articleSummary').value = data.description;
                     if (data.image) document.getElementById('articleImage').value = data.image;
-                    if (data.date) {
-                        const dateStr = data.date.length === 10 ? data.date : data.date.split('T')[0];
-                        const timeStr = data.time || '12:00';
-                        document.getElementById('articleDate').value = dateStr;
-                        document.getElementById('articleTime').value = timeStr.slice(0, 5);
-                    }
+                    applyPublishMetadata('article', data);
                     
                     if (data.injured !== null && data.injured !== undefined) document.getElementById('articleInjured').value = data.injured;
                     if (data.killed !== null && data.killed !== undefined) document.getElementById('articleKilled').value = data.killed;
@@ -1303,12 +1278,7 @@
                 if (response.ok) {
                     const data = await response.json();
                     if (data.title) document.getElementById('updateTitle').value = data.title;
-                    if (data.date) {
-                        const dateStr = data.date.length === 10 ? data.date : data.date.split('T')[0];
-                        const timeStr = data.time || '12:00';
-                        document.getElementById('updateDate').value = dateStr;
-                        document.getElementById('updateTime').value = timeStr.slice(0, 5);
-                    }
+                    applyPublishMetadata('update', data);
                 }
             } catch (err) {}
         }
@@ -1338,8 +1308,7 @@
                 const freshInjured = (freshData.injured !== null && freshData.injured !== undefined) ? freshData.injured : (item.injured_count || 0);
                 const freshKilled = (freshData.killed !== null && freshData.killed !== undefined) ? freshData.killed : (item.killed_count || 0);
                 const freshDateStr = freshData.date || item.published_at.split(' ')[0];
-                const freshTimeStr = freshData.time || '12:00';
-                const freshDt = new Date(freshDateStr + 'T' + freshTimeStr);
+                const freshTimeStr = freshData.time || item.published_at.split(' ')[1]?.slice(0, 5) || '00:00';
 
                 const diffContainer = document.getElementById('diffContainer');
                 diffContainer.innerHTML = '';
@@ -1365,8 +1334,8 @@
                 addDiffRow('Summary', 'articleSummary', item.summary, freshSummary);
                 addDiffRow('Injured Count', 'articleInjured', item.injured_count || 0, freshInjured);
                 addDiffRow('Killed Count', 'articleKilled', item.killed_count || 0, freshKilled);
-                addDiffRow('Date', 'articleDate', item.published_at.split(' ')[0], freshDt.toISOString().split('T')[0]);
-                addDiffRow('Time', 'articleTime', item.published_at.split(' ')[1]?.slice(0,5) || '00:00', freshDt.toTimeString().slice(0, 5));
+                addDiffRow('Date (Europe/Oslo)', 'articleDate', item.published_at.split(' ')[0], freshDateStr);
+                addDiffRow('Time (Europe/Oslo)', 'articleTime', item.published_at.split(' ')[1]?.slice(0,5) || '00:00', freshTimeStr);
                 addDiffRow('Category', 'categorySlug', item.category_slug || 'general', freshData.category_slug || 'general');
                 
                 if (item.image_url !== freshImage) {
@@ -1388,8 +1357,9 @@
                 document.getElementById('articleImage').value = freshImage;
                 document.getElementById('articleInjured').value = freshInjured;
                 document.getElementById('articleKilled').value = freshKilled;
-                document.getElementById('articleDate').value = freshDt.toISOString().split('T')[0];
-                document.getElementById('articleTime').value = freshDt.toTimeString().slice(0, 5);
+                document.getElementById('articleDate').value = freshDateStr;
+                document.getElementById('articleTime').value = freshTimeStr;
+                applyPublishMetadata('article', freshData);
                 
                 const lat = parseFloat(item.latitude);
                 const lng = parseFloat(item.longitude);
@@ -1430,9 +1400,9 @@
             let apiStart = start;
             let apiEnd = end;
 
-            const timelineRange = getTimelineWeekRange();
-            const timelineStartStr = timelineRange.start.toISOString().split('T')[0];
-            const timelineEndStr = timelineRange.end.toISOString().split('T')[0];
+            const timelineRange = getBottomTimelineRange();
+            const timelineStartStr = osloParts(timelineRange.start).date;
+            const timelineEndStr = osloParts(new Date(timelineRange.end.getTime() - 1)).date;
 
             if (timelineStartStr < apiStart) apiStart = timelineStartStr;
             if (timelineEndStr > apiEnd) apiEnd = timelineEndStr;
@@ -1448,7 +1418,7 @@
                         initialTargetId = null;
                     }
                 }
-            } catch (err) {}
+            } catch (err) { console.error('Could not load articles:', err); }
         }
 
         async function saveArticle() {
@@ -1531,9 +1501,8 @@
             const selectedOpt = selectEl.options[selectEl.selectedIndex];
             const selectedCatSlug = selectedOpt.dataset.slug || 'all';
 
-            const startDate = new Date(document.getElementById('startDate').value);
-            const endDate = new Date(document.getElementById('endDate').value);
-            endDate.setHours(23, 59, 59);
+            const startDate = parsePublishDate(document.getElementById('startDate').value);
+            const endDate = parsePublishDate(shiftCalendarDate(document.getElementById('endDate').value, 1));
 
             const sidebarFeedEl = document.getElementById('sidebarFeed');
             sidebarFeedEl.innerHTML = '';
@@ -1541,10 +1510,10 @@
             let visibleCount = 0;
 
             articlesData.forEach(item => {
-                const pubDate = new Date(item.published_at);
+                const pubDate = parsePublishDate(item.published_at);
                 
                 const matchesCat = (selectedCatSlug === 'all' || item.category_slug === selectedCatSlug);
-                const matchesDate = (pubDate >= startDate && pubDate <= endDate);
+                const matchesDate = (pubDate >= startDate && pubDate < endDate);
 
                 if (matchesCat && matchesDate) {
                     visibleCount++;
@@ -1588,7 +1557,7 @@
                                 <ul class="timeline-list">
                         `;
                         item.updates.forEach(upd => {
-                            const updDate = new Date(upd.published_at).toLocaleDateString();
+                            const updDate = parsePublishDate(upd.published_at).toLocaleDateString(undefined, { timeZone: APP_TIMEZONE });
                             const canDelUpd = currentUser && (currentUser.id == upd.user_id || ['admin', 'moderator'].includes(currentUser.role));
                             updatesHtml += `
                                 <li class="timeline-item">
@@ -1604,7 +1573,7 @@
                     const popupContent = `
                         <div class="article-card">
                             <div class="meta">
-                                <span>${pubDate.toLocaleDateString()}</span>
+                                <span>${pubDate.toLocaleDateString(undefined, { timeZone: APP_TIMEZONE })}</span>
                                 <span>by ${item.author || 'User'}</span>
                             </div>
                             <h4>${item.emoji} ${item.title}</h4>
@@ -1635,7 +1604,7 @@
                     feedCard.onclick = () => focusIncident(item.id);
                     feedCard.innerHTML = `
                         <div class="feed-item-header">
-                            <span>${item.emoji} ${pubDate.toLocaleDateString()}</span>
+                            <span>${item.emoji} ${pubDate.toLocaleDateString(undefined, { timeZone: APP_TIMEZONE })}</span>
                             <span>by ${item.author || 'User'}</span>
                         </div>
                         <div class="feed-item-title">${item.title}</div>
@@ -1655,6 +1624,7 @@
         }
 
         function focusIncident(id) {
+            highlightTimelineIncident(id);
             const item = articlesData.find(a => a.id == id);
             const marker = markersMap[id];
 
@@ -1671,58 +1641,40 @@
         async function updateMarkerPosition(articleId, lat, lng) {
             const item = articlesData.find(a => a.id == articleId);
             if (!item) return;
-
             const marker = markersMap[articleId];
-            if (marker) {
-                marker.setLatLng([lat, lng]);
+            const original = [Number(item.latitude), Number(item.longitude)];
+            if (!currentUser || !window.confirm(`Move this pin?\n\n${item.title}\nFrom: ${original[0].toFixed(5)}, ${original[1].toFixed(5)}\nTo: ${lat.toFixed(5)}, ${lng.toFixed(5)}\n\nOK saves the position. Cancel restores it.`)) {
+                marker.setLatLng(original);
+                return;
             }
-
-            item.latitude = lat;
-            item.longitude = lng;
-
-            if (document.getElementById('editingArticleId').value == articleId) {
-                document.getElementById('articleLat').value = lat;
-                document.getElementById('articleLng').value = lng;
-                document.getElementById('coordDisplay').innerText = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-            }
-
-            if (!currentUser) return;
-
+            marker.dragging.disable();
             try {
                 const res = await fetch('api/articles.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
+                        action: 'move_pin',
                         id: articleId,
                         latitude: lat,
-                        longitude: lng,
-                        title: item.title,
-                        summary: item.summary,
-                        url: item.url,
-                        image_url: item.image_url,
-                        category_slug: item.category_slug,
-                        injured_count: item.injured_count,
-                        killed_count: item.killed_count,
-                        published_at: item.published_at
+                        longitude: lng
                     })
                 });
-                if (!res.ok) {
-                    console.error('Failed to update marker position');
-                    showToast('Failed to save position', 'error');
-                } else {
-                    showToast('Pin position updated', 'success');
-                    // Brief visual feedback on marker
-                    if (marker) {
-                        marker.getElement().style.transition = 'transform 0.15s ease';
-                        marker.getElement().style.transform = 'scale(1.3)';
-                        setTimeout(() => {
-                            marker.getElement().style.transform = '';
-                        }, 200);
-                    }
+                const result = await res.json();
+                if (!res.ok) throw new Error(result.error || 'Failed to save position');
+                item.latitude = lat;
+                item.longitude = lng;
+                if (document.getElementById('editingArticleId').value == articleId) {
+                    document.getElementById('articleLat').value = lat;
+                    document.getElementById('articleLng').value = lng;
+                    document.getElementById('coordDisplay').innerText = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
                 }
+                showToast('Pin position saved', 'success');
             } catch (err) {
+                marker.setLatLng(original);
                 console.error('Error updating marker position:', err);
-                showToast('Error updating position', 'error');
+                showToast(err.message + ' — original position restored', 'error');
+            } finally {
+                if (currentUser && (currentUser.id == item.user_id || ['admin', 'moderator'].includes(currentUser.role))) marker.dragging.enable();
             }
         }
 
@@ -1774,34 +1726,54 @@
         /* ==================================================================
            BOTTOM 1-WEEK TIMELINE CONTROLS & RENDERING
            ================================================================== */
-        let bottomTimelineWeekOffset = 0;
+        let bottomTimelinePeriodOffset = 0;
+        let bottomTimelineView = 'week';
+        let selectedTimelineIncidentId = null;
         let bottomTimelineBaseDate = null;
         let isBottomTimelineMinimized = false;
 
-        function getTimelineWeekRange() {
+        function getBottomTimelineRange() {
             const base = bottomTimelineBaseDate ? new Date(bottomTimelineBaseDate) : new Date();
-            
-            // Set end of 7-day period (23:59:59)
-            const end = new Date(base);
-            end.setDate(end.getDate() + (bottomTimelineWeekOffset * 7));
-            end.setHours(23, 59, 59, 999);
-
-            // Start is 6 days prior (00:00:00) -> spans exactly 7 calendar days
-            const start = new Date(end);
-            start.setDate(start.getDate() - 6);
-            start.setHours(0, 0, 0, 0);
-
-            return { start, end };
+            let firstDate, days;
+            if (bottomTimelineView === 'month') {
+                const month = new Date(osloParts(base).date.slice(0, 7) + '-01T12:00:00Z');
+                month.setUTCMonth(month.getUTCMonth() + bottomTimelinePeriodOffset);
+                firstDate = month.toISOString().slice(0, 10);
+                days = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() + 1, 0)).getUTCDate();
+            } else {
+                const lastDate = shiftCalendarDate(osloParts(base).date, bottomTimelinePeriodOffset * 7);
+                firstDate = shiftCalendarDate(lastDate, -6);
+                days = 7;
+            }
+            const boundaries = Array.from({ length: days + 1 }, (_, i) => parsePublishDate(shiftCalendarDate(firstDate, i)));
+            return { start: boundaries[0], end: boundaries[days], boundaries };
         }
 
-        function shiftBottomTimelineWeek(delta) {
-            bottomTimelineWeekOffset += delta;
+        function changeBottomTimelineView(view) {
+            // Preserve the period being browsed when switching views.
+            const range = getBottomTimelineRange();
+            bottomTimelineBaseDate = new Date(range.end.getTime() - 1);
+            bottomTimelineView = view;
+            bottomTimelinePeriodOffset = 0;
+            const name = view === 'month' ? 'Month' : 'Week';
+            document.getElementById('timelinePrev').textContent = `◀ Prev ${name}`;
+            document.getElementById('timelineNext').textContent = `Next ${name} ▶`;
+            document.getElementById('timelineCurrent').textContent = `Current ${name}`;
+            document.getElementById('timelinePrev').title = `Previous ${name.toLowerCase()}`;
+            document.getElementById('timelineNext').title = `Next ${name.toLowerCase()}`;
+            document.getElementById('timelineCurrent').title = `Reset to current ${name.toLowerCase()}`;
             renderBottomTimeline();
             fetchArticlesFromAPI();
         }
 
-        function resetBottomTimelineWeek() {
-            bottomTimelineWeekOffset = 0;
+        function shiftBottomTimelinePeriod(delta) {
+            bottomTimelinePeriodOffset += delta;
+            renderBottomTimeline();
+            fetchArticlesFromAPI();
+        }
+
+        function resetBottomTimelinePeriod() {
+            bottomTimelinePeriodOffset = 0;
             bottomTimelineBaseDate = new Date();
             renderBottomTimeline();
             fetchArticlesFromAPI();
@@ -1832,7 +1804,7 @@
             if (!bottomTimelineBaseDate && articlesData && articlesData.length > 0) {
                 let latestTime = 0;
                 articlesData.forEach(a => {
-                    const t = new Date(a.published_at).getTime();
+                    const t = parsePublishDate(a.published_at).getTime();
                     if (t > latestTime) latestTime = t;
                 });
                 const now = new Date().getTime();
@@ -1844,33 +1816,46 @@
                 }
             }
 
-            const { start, end } = getTimelineWeekRange();
+            const { start, end, boundaries } = getBottomTimelineRange();
 
             // Label range
-            const optMonthDay = { month: 'short', day: 'numeric' };
-            const optYear = { year: 'numeric' };
-            rangeEl.innerText = `${start.toLocaleDateString(undefined, optMonthDay)} – ${end.toLocaleDateString(undefined, optMonthDay)} ${end.toLocaleDateString(undefined, optYear)}`;
+            const optMonthDay = { month: 'short', day: 'numeric', timeZone: APP_TIMEZONE };
+            rangeEl.innerText = `${start.toLocaleDateString(undefined, optMonthDay)} 00:00 → ${end.toLocaleDateString(undefined, optMonthDay)} 00:00 · Europe/Oslo`;
 
             // Render 7 Day Markers
             markersEl.innerHTML = '';
-            const todayStr = new Date().toDateString();
+            const todayStr = osloParts().date;
 
-            for (let i = 0; i < 7; i++) {
-                const d = new Date(start);
-                d.setDate(d.getDate() + i);
+            boundaries.forEach((d, i) => {
+                const tick = document.createElement('div');
+                tick.className = 'timeline-boundary';
+                tick.style.left = `${((d - start) / (end - start)) * 100}%`;
+                tick.title = `${osloParts(d).date} 00:00 Europe/Oslo`;
+                if (i === 0 || i === boundaries.length - 1) {
+                    tick.classList.add(i === 0 ? 'first' : 'last');
+                    const label = document.createElement('span');
+                    label.textContent = `${i === 0 ? 'Start' : 'End'} ${d.toLocaleDateString(undefined, optMonthDay)} 00:00`;
+                    tick.appendChild(label);
+                }
+                markersEl.appendChild(tick);
+            });
 
-                const pct = ((i + 0.5) / 7) * 100;
-                const isToday = (d.toDateString() === todayStr);
+            for (let i = 0; i < boundaries.length - 1; i++) {
+                // Month view keeps daily boundaries but labels every fifth day.
+                if (bottomTimelineView === 'month' && i % 5 !== 0) continue;
+                const d = boundaries[i];
+                const midpoint = (d.getTime() + boundaries[i + 1].getTime()) / 2;
+                const pct = ((midpoint - start) / (end - start)) * 100;
+                const isToday = (osloParts(d).date === todayStr);
 
                 const tick = document.createElement('div');
                 tick.className = `timeline-day-tick ${isToday ? 'today' : ''}`;
                 tick.style.left = `${pct}%`;
 
-                const dayName = d.toLocaleDateString(undefined, { weekday: 'short' });
-                const dayNum = d.getDate();
+                const dayName = d.toLocaleDateString(undefined, { weekday: 'short', timeZone: APP_TIMEZONE });
+                const dayNum = osloParts(d).date.slice(8);
 
                 tick.innerHTML = `
-                    <div class="timeline-day-tick-line"></div>
                     <div class="timeline-day-tick-label">${dayName} ${dayNum}${isToday ? ' (Today)' : ''}</div>
                 `;
                 markersEl.appendChild(tick);
@@ -1894,8 +1879,8 @@
                     const matchesCat = (selectedCatSlug === 'all' || article.category_slug === selectedCatSlug);
                     if (!matchesCat) return;
 
-                    const artTime = new Date(article.published_at).getTime();
-                    if (artTime >= startTime && artTime <= endTime) {
+                    const artTime = parsePublishDate(article.published_at).getTime();
+                    if (artTime >= startTime && artTime < endTime) {
                         timelineEvents.push({
                             type: 'incident',
                             id: article.id,
@@ -1911,8 +1896,8 @@
 
                     if (article.updates && article.updates.length > 0) {
                         article.updates.forEach(upd => {
-                            const updTime = new Date(upd.published_at).getTime();
-                            if (updTime >= startTime && updTime <= endTime) {
+                            const updTime = parsePublishDate(upd.published_at).getTime();
+                            if (updTime >= startTime && updTime < endTime) {
                                 timelineEvents.push({
                                     type: 'update',
                                     id: upd.id,
@@ -1955,14 +1940,14 @@
 
                 const dot = document.createElement('div');
                 dot.className = 'timeline-dot';
+                dot.dataset.incidentId = String(ev.parentId);
+                dot.classList.toggle('active', String(ev.parentId) === selectedTimelineIncidentId);
                 dot.style.left = `${pct}%`;
-                if (isStaggered) {
-                    dot.style.top = '25px';
-                }
+                dot.style.top = isStaggered ? '25px' : '15px';
 
-                const pubDateObj = new Date(ev.published_at);
-                const timeFormatted = pubDateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                const dateFormatted = pubDateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+                const pubDateObj = parsePublishDate(ev.published_at);
+                const timeFormatted = pubDateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: APP_TIMEZONE }) + ' Europe/Oslo';
+                const dateFormatted = pubDateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: APP_TIMEZONE });
 
                 if (ev.type === 'incident') {
                     dot.innerHTML = `
@@ -1993,8 +1978,7 @@
 
                 dot.onclick = (e) => {
                     e.stopPropagation();
-                    document.querySelectorAll('.timeline-dot').forEach(d => d.classList.remove('active'));
-                    dot.classList.add('active');
+                    highlightTimelineIncident(ev.parentId);
                     focusIncident(ev.parentId);
                 };
 
@@ -2002,8 +1986,15 @@
             });
         }
 
+        function highlightTimelineIncident(id) {
+            selectedTimelineIncidentId = String(id);
+            document.querySelectorAll('.timeline-dot').forEach(dot => {
+                dot.classList.toggle('active', dot.dataset.incidentId === selectedTimelineIncidentId);
+            });
+        }
+
         parseUrlParams();
-        initDualSlider();
+        initDateRange();
         checkSession();
         fetchArticlesFromAPI();
 
@@ -2054,7 +2045,7 @@
 
             resultsEl.innerHTML = matches.slice(0, 20).map(item => {
                 const catInfo = CATEGORY_MAP[item.category_slug] || { emoji: '📰', name: 'General' };
-                const dateStr = new Date(item.published_at).toLocaleDateString();
+                const dateStr = parsePublishDate(item.published_at).toLocaleDateString(undefined, { timeZone: APP_TIMEZONE });
                 return `
                     <div class="incident-search-result-item" onclick="focusIncident(${item.id}); hideIncidentSearchResults();" tabindex="0" role="button" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();focusIncident(${item.id});hideIncidentSearchResults();}">
                         <div class="incident-search-result-title">${item.emoji} ${item.title}</div>

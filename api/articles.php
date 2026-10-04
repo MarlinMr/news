@@ -80,7 +80,8 @@ $categoryEmojiMap = [
     'science'        => '🎓',
     'wildlife'       => '🐾',
     'culture'        => '🎨',
-    'crime'          => '⚖️'
+    'crime'          => '⚖️',
+    'violent-crime'  => '🔪'
 ];
 
 // ------------------------------------------------------------------
@@ -139,6 +140,29 @@ $currentUserRole = $_SESSION['user_role'] ?? 'user';
 // ------------------------------------------------------------------
 if ($method === 'POST') {
     $input = json_decode(file_get_contents('php://input'), true);
+
+    if (($input['action'] ?? '') === 'move_pin') {
+        $id = (int)($input['id'] ?? 0);
+        $lat = filter_var($input['latitude'] ?? null, FILTER_VALIDATE_FLOAT);
+        $lng = filter_var($input['longitude'] ?? null, FILTER_VALIDATE_FLOAT);
+        if ($id <= 0 || $lat === false || $lng === false || abs($lat) > 90 || abs($lng) > 180) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid coordinates']);
+            exit;
+        }
+        $stmt = $pdo->prepare('SELECT user_id FROM articles WHERE id = ?');
+        $stmt->execute([$id]);
+        $article = $stmt->fetch();
+        if (!$article || ($article['user_id'] != $currentUserId && !in_array($currentUserRole, ['admin', 'moderator']))) {
+            http_response_code($article ? 403 : 404);
+            echo json_encode(['error' => $article ? 'Forbidden' : 'Article not found']);
+            exit;
+        }
+        $stmt = $pdo->prepare('UPDATE articles SET latitude = ?, longitude = ? WHERE id = ?');
+        $stmt->execute([$lat, $lng, $id]);
+        echo json_encode(['message' => 'Position saved']);
+        exit;
+    }
 
     // --- CASE A: ADD A SUB-TIMELINE UPDATE TO AN EXISTING MASTER PIN ---
     if (isset($input['action']) && $input['action'] === 'add_update') {

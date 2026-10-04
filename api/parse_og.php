@@ -41,20 +41,25 @@ $rawDate = getMetaTag($xpath, 'article:published_time')
 
 $formattedDate = '';
 $formattedTime = '';
+$publishedAt = '';
 if (!empty($rawDate)) {
-    $time = strtotime($rawDate);
-    if ($time !== false) {
-        $formattedDate = date('Y-m-d', $time);
-        $formattedTime = date('H:i', $time);
+    try {
+        $published = new DateTimeImmutable($rawDate, new DateTimeZone('Europe/Oslo'));
+        $published = $published->setTimezone(new DateTimeZone('Europe/Oslo'));
+        $formattedDate = $published->format('Y-m-d');
+        // A date alone does not establish a publication clock time.
+        if (preg_match('/[T\s]\d{1,2}:\d{2}/', $rawDate)) {
+            $formattedTime = $published->format('H:i');
+            $publishedAt = $published->format(DateTimeInterface::ATOM);
+        }
+    } catch (Exception $e) {
+        // Leave unavailable metadata empty, rather than guessing a time.
     }
 }
 
 $textToAnalyze = $title . ' ' . $description;
 
-// Fallback: extract time from text if not found in meta tags
-if (empty($formattedTime)) {
-    $formattedTime = extractTimeFromText($textToAnalyze);
-}
+// Incident times in descriptions are not necessarily publication times.
 
 // --- 1. CASUALTY EXTRACTION ---
 $casualties = extractCasualties($textToAnalyze);
@@ -71,6 +76,9 @@ echo json_encode([
     'image'            => trim($image),
     'date'             => $formattedDate,
     'time'             => $formattedTime,
+    'published_at'     => $publishedAt,
+    'timezone'         => 'Europe/Oslo',
+    'time_source'      => $formattedTime ? 'metadata' : 'unknown',
     'injured'          => $casualties['injured'],
     'killed'           => $casualties['killed'],
     'category_slug'    => $guessedCategory,
@@ -100,6 +108,10 @@ function extractCasualties($text) {
 
 // Keyword classifier logic
 function guessCategory($text) {
+    // Match violent offences before broader rules such as police or explosions.
+    if (preg_match('/\b(?:skyting\w*|skuddveksling\w*|knivstikk\w*|drap\w*|vold|volden|voldelig\w*|voldshendelse\w*|voldsforbrytelse\w*|overfall\w*|ran|ranet|ransforsøk|shooting\w*|stabb(?:ing|ed)|murder\w*|homicide\w*|assault\w*|robber(?:y|ies))\b/iu', $text)) {
+        return 'violent-crime';
+    }
     $rules = [
         'collisions'    => ['kollisjon', 'ulykke', 'krasj', 'derailment', 'collision', 'crash', 'avsporing', 'trafikkulykke', 'bilulykke', 'påkjørsel'],
         'fires'         => ['brann', 'skogbrann', 'eksplosjon', 'fire', 'wildfire', 'blaze', 'fyr'],
@@ -108,7 +120,7 @@ function guessCategory($text) {
         'military'      => ['forsvaret', 'militær', 'nato', 'military', 'army', 'navy', 'fregatt', 'soldat'],
         'missiles'      => ['missil', 'rakett', 'luftvern', 'missile', 'rocket', 'air strike', 'droneangrep'],
         'protests'      => ['demonstrasjon', 'protest', 'markering', 'strike', 'streik', 'opptøyer'],
-        'crime'         => ['politi', 'skytine', 'knivstikking', 'ran', 'drap', 'police', 'shooting', 'stabbing', 'arrested', 'siktet'],
+        'crime'         => ['politi', 'police', 'arrested', 'siktet'],
         'cyber'         => ['datainnbrudd', 'mistenkelig aktivitet', 'cyber', 'hack', 'outage', 'downtime', 'it-feil'],
         'drones'        => ['drone', 'uav', 'droner', 'observasjon'],
         'breaking'      => ['akutt', 'just in', 'breaking', 'siste nytt', 'ekstraordinær']
@@ -130,30 +142,4 @@ function guessPlaceName($title) {
         return trim($m[1]);
     }
     return null;
-}
-
-// Extract time from text (e.g., "kl. 14:30", "kl 14.30", "at 2:30 PM", "14:30")
-function extractTimeFromText($text) {
-    // Norwegian: kl. 14:30, kl 14.30, kl. 14.30
-    if (preg_match('/kl\.?\s*(\d{1,2})[.:](\d{2})/i', $text, $m)) {
-        return sprintf('%02d:%02d', (int)$m[1], (int)$m[2]);
-    }
-    // 24h format: 14:30, 09:15
-    if (preg_match('/\b(\d{1,2}):(\d{2})\b/', $text, $m)) {
-        $h = (int)$m[1];
-        $min = (int)$m[2];
-        if ($h >= 0 && $h <= 23 && $min >= 0 && $min <= 59) {
-            return sprintf('%02d:%02d', $h, $min);
-        }
-    }
-    // 12h format: 2:30 PM, 2:30pm
-    if (preg_match('/\b(\d{1,2}):(\d{2})\s*(am|pm)\b/i', $text, $m)) {
-        $h = (int)$m[1];
-        $min = (int)$m[2];
-        $ampm = strtolower($m[3]);
-        if ($ampm === 'pm' && $h !== 12) $h += 12;
-        if ($ampm === 'am' && $h === 12) $h = 0;
-        return sprintf('%02d:%02d', $h, $min);
-    }
-    return '';
 }
