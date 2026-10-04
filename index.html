@@ -1376,6 +1376,9 @@
                 addDiffRow('Summary', 'articleSummary', item.summary, freshSummary);
                 addDiffRow('Injured Count', 'articleInjured', item.injured_count || 0, freshInjured);
                 addDiffRow('Killed Count', 'articleKilled', item.killed_count || 0, freshKilled);
+                addDiffRow('Date', 'articleDate', item.published_at.split(' ')[0], freshDt.toISOString().split('T')[0]);
+                addDiffRow('Time', 'articleTime', item.published_at.split(' ')[1]?.slice(0,5) || '00:00', freshDt.toTimeString().slice(0, 5));
+                addDiffRow('Category', 'categorySlug', item.category_slug || 'general', freshData.category_slug || 'general');
                 
                 if (item.image_url !== freshImage) {
                     addDiffRow('Image URL', 'articleImage', item.image_url, freshImage);
@@ -1564,10 +1567,18 @@
                         iconAnchor: [15, 15]
                     });
 
-                    const marker = L.marker([item.latitude, item.longitude], { icon: customIcon });
+                    const marker = L.marker([item.latitude, item.longitude], { icon: customIcon, draggable: canEdit });
                     markersMap[item.id] = marker;
 
                     const canEdit = currentUser && (currentUser.id == item.user_id || ['admin', 'moderator'].includes(currentUser.role));
+
+                    if (canEdit) {
+                        marker.on('dragend', function(e) {
+                            const newLat = e.target.getLatLng().lat;
+                            const newLng = e.target.getLatLng().lng;
+                            updateMarkerPosition(item.id, newLat, newLng);
+                        });
+                    }
 
                     const injuredNum = parseInt(item.injured_count) || 0;
                     const killedNum  = parseInt(item.killed_count) || 0;
@@ -1665,6 +1676,50 @@
                         marker.openPopup();
                     });
                 }, 500);
+            }
+        }
+
+        async function updateMarkerPosition(articleId, lat, lng) {
+            const item = articlesData.find(a => a.id == articleId);
+            if (!item) return;
+
+            const marker = markersMap[articleId];
+            if (marker) {
+                marker.setLatLng([lat, lng]);
+            }
+
+            item.latitude = lat;
+            item.longitude = lng;
+
+            if (document.getElementById('editingArticleId').value == articleId) {
+                document.getElementById('articleLat').value = lat;
+                document.getElementById('articleLng').value = lng;
+                document.getElementById('coordDisplay').innerText = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+            }
+
+            if (!currentUser) return;
+
+            try {
+                const res = await fetch('api/articles.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        id: articleId,
+                        latitude: lat,
+                        longitude: lng,
+                        title: item.title,
+                        summary: item.summary,
+                        url: item.url,
+                        image_url: item.image_url,
+                        category_slug: item.category_slug,
+                        injured_count: item.injured_count,
+                        killed_count: item.killed_count,
+                        published_at: item.published_at
+                    })
+                });
+                if (!res.ok) console.error('Failed to update marker position');
+            } catch (err) {
+                console.error('Error updating marker position:', err);
             }
         }
 
