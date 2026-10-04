@@ -1560,6 +1560,8 @@
                 if (matchesCat && matchesDate) {
                     visibleCount++;
 
+                    const canEdit = currentUser && (currentUser.id == item.user_id || ['admin', 'moderator'].includes(currentUser.role));
+
                     const customIcon = L.divIcon({
                         className: 'emoji-marker',
                         html: `<div>${item.emoji}</div>`,
@@ -1569,8 +1571,6 @@
 
                     const marker = L.marker([item.latitude, item.longitude], { icon: customIcon, draggable: canEdit });
                     markersMap[item.id] = marker;
-
-                    const canEdit = currentUser && (currentUser.id == item.user_id || ['admin', 'moderator'].includes(currentUser.role));
 
                     if (canEdit) {
                         marker.on('dragend', function(e) {
