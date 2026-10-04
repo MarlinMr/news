@@ -681,9 +681,9 @@
 
             <div class="preset-group">
                 <button type="button" class="btn-preset" onclick="applyPreset(7, event)">7D</button>
-                <button type="button" class="btn-preset" onclick="applyPreset(30, event)">1M</button>
+                <button type="button" class="btn-preset active" onclick="applyPreset(30, event)">1M</button>
                 <button type="button" class="btn-preset" onclick="applyPreset(180, event)">6M</button>
-                <button type="button" class="btn-preset active" onclick="applyPreset(365, event)">1Y</button>
+                <button type="button" class="btn-preset" onclick="applyPreset(365, event)">1Y</button>
                 <button type="button" class="btn-preset" onclick="applyPreset(365, event)">ALL</button>
             </div>
 
@@ -1004,7 +1004,7 @@
             const sliderElement = document.getElementById('dualDateSlider');
             const now = new Date();
             const maxDays = 365;
-            const defaultStartDaysAgo = 365;
+            const defaultStartDaysAgo = 30;
 
             noUiSlider.create(sliderElement, {
                 start: [maxDays - defaultStartDaysAgo, maxDays],
