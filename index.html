@@ -18,7 +18,8 @@
 
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
-        body { display: flex; flex-direction: column; height: 100vh; overflow: hidden; background: #0f172a; }
+        :root { --safe-area-inset-bottom: env(safe-area-inset-bottom); }
+        body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; background: #0f172a; }
 
         /* Header Bar */
         header {
@@ -46,7 +47,12 @@
             font-size: 13px;
         }
 
-        .search-box { display: flex; gap: 4px; width: 220px; }
+        .timeline-container .category-select {
+            flex-shrink: 0;
+            min-width: 160px;
+        }
+
+        .search-box { display: flex; flex-direction: column; gap: 4px; width: 220px; }
         .search-box input { flex: 1; min-width: 0; }
         .search-box button {
             padding: 6px 10px;
@@ -60,6 +66,31 @@
             white-space: nowrap;
         }
 
+        .search-tabs { display: flex; gap: 2px; background: #1e293b; border-radius: 4px; padding: 2px; border: 1px solid #334155; }
+        .search-tab { background: none; border: none; color: #94a3b8; padding: 4px 10px; border-radius: 3px; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.15s ease; }
+        .search-tab:hover { color: #f8fafc; background: #334155; }
+        .search-tab.active { background: #3b82f6; color: #ffffff; }
+        .search-tab:focus { outline: 2px solid #3b82f6; outline-offset: -2px; }
+
+        .search-panels { position: relative; }
+        .search-panel { display: flex; gap: 4px; }
+        .search-panel input { flex: 1; min-width: 0; padding: 6px 10px; border-radius: 4px; border: 1px solid #334155; background: #0f172a; color: white; font-size: 13px; }
+        .search-panel button { padding: 6px 10px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 13px; white-space: nowrap; }
+        .search-panel[hidden] { display: none; }
+
+        .incident-search-results { position: absolute; top: 100%; left: 0; right: 0; margin-top: 4px; background: #1e293b; border: 1px solid #334155; border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); max-height: 300px; overflow-y: auto; z-index: 100; }
+        .incident-search-result-item { padding: 10px 12px; border-bottom: 1px solid #334155; cursor: pointer; transition: background 0.15s ease; }
+        .incident-search-result-item:last-child { border-bottom: none; }
+        .incident-search-result-item:hover { background: #334155; }
+        .incident-search-result-title { font-weight: 600; color: #f8fafc; font-size: 13px; margin-bottom: 4px; }
+        .incident-search-result-meta { display: flex; gap: 8px; font-size: 11px; color: #94a3b8; flex-wrap: wrap; }
+        .incident-search-result-category { background: #334155; padding: 1px 6px; border-radius: 3px; font-size: 10px; }
+        .incident-search-empty { padding: 16px; text-align: center; color: #64748b; font-size: 12px; }
+
+        @media (min-width: 851px) {
+            .search-box { width: 280px; }
+        }
+
         .timeline-container { 
             display: flex; 
             align-items: center; 
@@ -69,7 +100,7 @@
             padding: 6px 12px; 
             border-radius: 6px; 
             border: 1px solid #334155;
-            width: 540px;
+            width: 680px;
             flex-shrink: 0;
         }
 
@@ -291,13 +322,18 @@
         @media (max-width: 850px) {
             header { flex-direction: column; align-items: stretch; height: auto; padding: 10px 12px; gap: 8px; }
             .header-top-row { display: flex; align-items: center; justify-content: space-between; width: 100%; }
-            .controls-group { width: 100%; justify-content: space-between; gap: 6px; }
-            .category-select { flex: 1; max-width: 49%; font-size: 12px; }
-            .search-box { flex: 1; max-width: 49%; }
+            .controls-group { width: 100%; flex-direction: column; gap: 8px; }
+            .category-select { width: 100%; max-width: none; font-size: 12px; }
+            .search-box { width: 100%; max-width: none; }
             .search-box input { font-size: 12px; padding: 5px 8px; }
             .search-box button { padding: 5px 8px; font-size: 12px; }
+            .search-tabs { flex-wrap: wrap; }
+            .search-tab { flex: 1; text-align: center; padding: 6px 8px; font-size: 11px; }
+            .search-panel input { font-size: 12px; padding: 6px 8px; }
+            .search-panel button { font-size: 12px; padding: 6px 8px; }
 
             .timeline-container { width: 100%; flex-direction: column; gap: 8px; padding: 8px; }
+            .timeline-container .category-select { width: 100%; min-width: 0; }
             .preset-group { width: 100%; justify-content: space-between; }
             .btn-preset { flex: 1; text-align: center; }
             .slider-wrapper { width: 100%; padding: 4px 6px; }
@@ -305,7 +341,6 @@
             .date-pickers input[type="date"] { flex: 1; width: 45%; font-size: 11px; padding: 4px; }
 
             .sidebar, .sidebar-toggle-btn { display: none !important; }
-            .bottom-timeline { left: 8px !important; right: 8px !important; bottom: 8px !important; }
         }
 
         /* Bottom 1-Week Timeline Bar */
@@ -585,6 +620,28 @@
         </div>
 
         <div class="controls-group">
+            <div class="search-box" id="searchBox">
+                <div class="search-tabs" role="tablist" aria-label="Search mode">
+                    <button type="button" class="search-tab active" role="tab" aria-selected="true" aria-controls="location-search-panel" id="tab-location" onclick="switchSearchTab('location')">📍 Location</button>
+                    <button type="button" class="search-tab" role="tab" aria-selected="false" aria-controls="incident-search-panel" id="tab-incident" onclick="switchSearchTab('incident')">📰 Incidents</button>
+                </div>
+                <div class="search-panels">
+                    <form class="search-panel active" id="location-search-panel" role="tabpanel" aria-labelledby="tab-location" onsubmit="event.preventDefault(); searchLocation();">
+                        <label for="searchInput" class="sr-only">Search address or street</label>
+                        <input type="text" id="searchInput" placeholder="Search address or street...">
+                        <button type="submit">Search</button>
+                    </form>
+                    <div class="search-panel" id="incident-search-panel" role="tabpanel" aria-labelledby="tab-incident" hidden>
+                        <label for="incidentSearchInput" class="sr-only">Search incidents by title, summary, category...</label>
+                        <input type="text" id="incidentSearchInput" placeholder="Search incidents (title, summary, category)..." oninput="debouncedIncidentSearch(this.value)">
+                        <button type="button" onclick="performIncidentSearch(document.getElementById('incidentSearchInput').value)">Search</button>
+                        <div id="incidentSearchResults" class="incident-search-results" hidden></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="timeline-container">
             <label for="categoryFilter" class="sr-only">Filter by Category</label>
             <select id="categoryFilter" class="category-select" onchange="handleCategoryFilterChange()">
                 <option value="ALL" data-slug="all">All Categories</option>
@@ -622,14 +679,6 @@
                 <option value="⚖️" data-slug="crime">⚖️ Crime & Legal</option>
             </select>
 
-            <form class="search-box" onsubmit="event.preventDefault(); searchLocation();">
-                <label for="searchInput" class="sr-only">Search address or street</label>
-                <input type="text" id="searchInput" placeholder="Search address or street...">
-                <button type="submit">Search</button>
-            </form>
-        </div>
-
-        <div class="timeline-container">
             <div class="preset-group">
                 <button type="button" class="btn-preset" onclick="applyPreset(7, event)">7D</button>
                 <button type="button" class="btn-preset" onclick="applyPreset(30, event)">1M</button>
@@ -656,9 +705,12 @@
         <div id="map"></div>
 
         <div class="sidebar" id="sidebar">
-            <div class="sidebar-header">
-                <span>Recent Incidents (<span id="feedCount">0</span>)</span>
+<div class="sidebar-header">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+                <span style="font-size: 14px; font-weight: bold;">Incidents in Timerange</span>
+                <span id="feedCount" style="background: #334155; color: #94a3b8; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px;">0</span>
             </div>
+        </div>
             <div class="sidebar-feed" id="sidebarFeed"></div>
         </div>
 
@@ -1355,8 +1407,18 @@
             const end = document.getElementById('endDate').value;
             if (!start || !end) return;
 
+            let apiStart = start;
+            let apiEnd = end;
+
+            const timelineRange = getTimelineWeekRange();
+            const timelineStartStr = timelineRange.start.toISOString().split('T')[0];
+            const timelineEndStr = timelineRange.end.toISOString().split('T')[0];
+
+            if (timelineStartStr < apiStart) apiStart = timelineStartStr;
+            if (timelineEndStr > apiEnd) apiEnd = timelineEndStr;
+
             try {
-                const res = await fetch(`api/articles.php?start_date=${start}&end_date=${end}`);
+                const res = await fetch(`api/articles.php?start_date=${apiStart}&end_date=${apiEnd}`);
                 if (res.ok) {
                     articlesData = await res.json();
                     renderMarkers();
@@ -1627,12 +1689,14 @@
         function shiftBottomTimelineWeek(delta) {
             bottomTimelineWeekOffset += delta;
             renderBottomTimeline();
+            fetchArticlesFromAPI();
         }
 
         function resetBottomTimelineWeek() {
             bottomTimelineWeekOffset = 0;
             bottomTimelineBaseDate = new Date();
             renderBottomTimeline();
+            fetchArticlesFromAPI();
         }
 
         function toggleBottomTimeline() {
@@ -1838,6 +1902,102 @@
         initDualSlider();
         checkSession();
         fetchArticlesFromAPI();
+
+        function adjustBottomTimelinePosition() {
+            const header = document.querySelector('header');
+            const timeline = document.getElementById('bottomTimeline');
+            if (!header || !timeline) return;
+
+            const isMobile = window.matchMedia('(max-width: 850px)').matches;
+            if (isMobile) {
+                const headerHeight = header.offsetHeight;
+                const safeAreaBottom = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--safe-area-inset-bottom')) || 0;
+                const extraPadding = 12;
+                timeline.style.bottom = (headerHeight + safeAreaBottom + extraPadding) + 'px';
+            } else {
+                timeline.style.bottom = '';
+            }
+        }
+
+        window.addEventListener('resize', adjustBottomTimelinePosition);
+        window.addEventListener('orientationchange', () => setTimeout(adjustBottomTimelinePosition, 100));
+        document.addEventListener('DOMContentLoaded', adjustBottomTimelinePosition);
+        setTimeout(adjustBottomTimelinePosition, 0);
+
+        let incidentSearchDebounceTimer = null;
+        let activeSearchTab = 'location';
+
+        function switchSearchTab(tab) {
+            activeSearchTab = tab;
+            document.querySelectorAll('.search-tab').forEach(btn => {
+                btn.classList.toggle('active', btn.id === 'tab-' + tab);
+                btn.setAttribute('aria-selected', btn.id === 'tab-' + tab);
+            });
+            document.getElementById('location-search-panel').hidden = tab !== 'location';
+            document.getElementById('incident-search-panel').hidden = tab !== 'incident';
+            document.getElementById('incident-search-panel').setAttribute('aria-hidden', tab !== 'incident');
+            if (tab === 'incident') {
+                setTimeout(() => document.getElementById('incidentSearchInput').focus(), 0);
+            }
+        }
+
+        function debouncedIncidentSearch(query) {
+            clearTimeout(incidentSearchDebounceTimer);
+            incidentSearchDebounceTimer = setTimeout(() => performIncidentSearch(query), 200);
+        }
+
+        function performIncidentSearch(query) {
+            const resultsEl = document.getElementById('incidentSearchResults');
+            const trimmed = query.trim().toLowerCase();
+            if (!trimmed) {
+                resultsEl.hidden = true;
+                resultsEl.innerHTML = '';
+                return;
+            }
+
+            const matches = articlesData.filter(item => {
+                const title = (item.title || '').toLowerCase();
+                const summary = (item.summary || '').toLowerCase();
+                const category = (CATEGORY_MAP[item.category_slug]?.name || '').toLowerCase();
+                const author = (item.author || '').toLowerCase();
+                return title.includes(trimmed) || summary.includes(trimmed) || category.includes(trimmed) || author.includes(trimmed);
+            });
+
+            if (matches.length === 0) {
+                resultsEl.innerHTML = '<div class="incident-search-empty">No incidents found matching "' + query + '"</div>';
+                resultsEl.hidden = false;
+                return;
+            }
+
+            resultsEl.innerHTML = matches.slice(0, 20).map(item => {
+                const catInfo = CATEGORY_MAP[item.category_slug] || { emoji: '📰', name: 'General' };
+                const dateStr = new Date(item.published_at).toLocaleDateString();
+                return `
+                    <div class="incident-search-result-item" onclick="focusIncident(${item.id}); hideIncidentSearchResults();" tabindex="0" role="button" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();focusIncident(${item.id});hideIncidentSearchResults();}">
+                        <div class="incident-search-result-title">${item.emoji} ${item.title}</div>
+                        <div class="incident-search-result-meta">
+                            <span>${dateStr}</span>
+                            <span class="incident-search-result-category">${catInfo.emoji} ${catInfo.name}</span>
+                            ${item.injured_count > 0 || item.killed_count > 0 ? `
+                                <span style="color:#f59e0b">${item.injured_count > 0 ? '🩹 ' + item.injured_count : ''} ${item.killed_count > 0 ? '✝️ ' + item.killed_count : ''}</span>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            resultsEl.hidden = false;
+        }
+
+        function hideIncidentSearchResults() {
+            document.getElementById('incidentSearchResults').hidden = true;
+        }
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('#incident-search-panel')) {
+                hideIncidentSearchResults();
+            }
+        });
     </script>
 </body>
 </html>
