@@ -832,7 +832,7 @@
             <input type="url" id="articleImage" placeholder="Auto-populated image link...">
 
             <label for="articleDate">Publish Date</label>
-            <input type="date" id="articleDate">
+            <input type="datetime-local" id="articleDate">
 
             <input type="hidden" id="editingArticleId">
             <input type="hidden" id="articleLat">
@@ -860,7 +860,7 @@
             <input type="text" id="updateSource" placeholder="e.g. NRK, VG, Aftenposten">
 
             <label for="updateDate">Publish Date</label>
-            <input type="date" id="updateDate">
+            <input type="datetime-local" id="updateDate">
 
             <input type="hidden" id="parentArticleId">
 
@@ -1177,7 +1177,7 @@
             document.getElementById('coordDisplay').innerText = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
             document.getElementById('suggestedLocBox').style.display = 'none';
 
-            document.getElementById('articleDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('articleDate').value = new Date().toISOString().slice(0, 16);
             clearModalInputs();
             
             document.getElementById('diffReviewBox').style.display = 'none';
@@ -1197,7 +1197,7 @@
             document.getElementById('articleImage').value = item.image_url || '';
             document.getElementById('articleInjured').value = item.injured_count || 0;
             document.getElementById('articleKilled').value = item.killed_count || 0;
-            document.getElementById('articleDate').value = item.published_at.split(' ')[0];
+            document.getElementById('articleDate').value = item.published_at.replace(' ', 'T').slice(0, 16);
             
             const lat = parseFloat(item.latitude);
             const lng = parseFloat(item.longitude);
@@ -1225,7 +1225,7 @@
             document.getElementById('updateUrl').value = '';
             document.getElementById('updateTitle').value = '';
             document.getElementById('updateSource').value = '';
-            document.getElementById('updateDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('updateDate').value = new Date().toISOString().slice(0, 16);
             document.getElementById('updateModal').style.display = 'flex';
         }
 
@@ -1238,7 +1238,7 @@
                     if (data.title) document.getElementById('articleTitle').value = data.title;
                     if (data.description) document.getElementById('articleSummary').value = data.description;
                     if (data.image) document.getElementById('articleImage').value = data.image;
-                    if (data.date) document.getElementById('articleDate').value = data.date;
+                    if (data.date) document.getElementById('articleDate').value = (data.date.length === 10 ? data.date + 'T00:00' : data.date).slice(0, 16);
                     
                     if (data.injured !== null && data.injured !== undefined) document.getElementById('articleInjured').value = data.injured;
                     if (data.killed !== null && data.killed !== undefined) document.getElementById('articleKilled').value = data.killed;
@@ -1294,7 +1294,7 @@
                 if (response.ok) {
                     const data = await response.json();
                     if (data.title) document.getElementById('updateTitle').value = data.title;
-                    if (data.date) document.getElementById('updateDate').value = data.date;
+                    if (data.date) document.getElementById('updateDate').value = (data.date.length === 10 ? data.date + 'T00:00' : data.date).slice(0, 16);
                 }
             } catch (err) {}
         }
@@ -1323,7 +1323,9 @@
                 const freshImage = freshData.image || item.image_url || '';
                 const freshInjured = (freshData.injured !== null && freshData.injured !== undefined) ? freshData.injured : (item.injured_count || 0);
                 const freshKilled = (freshData.killed !== null && freshData.killed !== undefined) ? freshData.killed : (item.killed_count || 0);
-                const freshDate = freshData.date || item.published_at.split(' ')[0];
+                const freshDate = (freshData.date || item.published_at.split(' ')[0]).length === 10 
+                    ? (freshData.date || item.published_at.split(' ')[0]) + 'T00:00' 
+                    : (freshData.date || item.published_at.split(' ')[0]);
 
                 const diffContainer = document.getElementById('diffContainer');
                 diffContainer.innerHTML = '';
