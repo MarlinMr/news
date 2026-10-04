@@ -39,14 +39,21 @@ $rawDate = getMetaTag($xpath, 'article:published_time')
         ?: '';
 
 $formattedDate = '';
+$formattedTime = '';
 if (!empty($rawDate)) {
     $time = strtotime($rawDate);
     if ($time !== false) {
         $formattedDate = date('Y-m-d', $time);
+        $formattedTime = date('H:i', $time);
     }
 }
 
 $textToAnalyze = $title . ' ' . $description;
+
+// Fallback: extract time from text if not found in meta tags
+if (empty($formattedTime)) {
+    $formattedTime = extractTimeFromText($textToAnalyze);
+}
 
 // --- 1. CASUALTY EXTRACTION ---
 $casualties = extractCasualties($textToAnalyze);
@@ -62,6 +69,7 @@ echo json_encode([
     'description'      => trim($description),
     'image'            => trim($image),
     'date'             => $formattedDate,
+    'time'             => $formattedTime,
     'injured'          => $casualties['injured'],
     'killed'           => $casualties['killed'],
     'category_slug'    => $guessedCategory,
@@ -121,4 +129,30 @@ function guessPlaceName($title) {
         return trim($m[1]);
     }
     return null;
+}
+
+// Extract time from text (e.g., "kl. 14:30", "kl 14.30", "at 2:30 PM", "14:30")
+function extractTimeFromText($text) {
+    // Norwegian: kl. 14:30, kl 14.30, kl. 14.30
+    if (preg_match('/kl\.?\s*(\d{1,2})[.:](\d{2})/i', $text, $m)) {
+        return sprintf('%02d:%02d', (int)$m[1], (int)$m[2]);
+    }
+    // 24h format: 14:30, 09:15
+    if (preg_match('/\b(\d{1,2}):(\d{2})\b/', $text, $m)) {
+        $h = (int)$m[1];
+        $min = (int)$m[2];
+        if ($h >= 0 && $h <= 23 && $min >= 0 && $min <= 59) {
+            return sprintf('%02d:%02d', $h, $min);
+        }
+    }
+    // 12h format: 2:30 PM, 2:30pm
+    if (preg_match('/\b(\d{1,2}):(\d{2})\s*(am|pm)\b/i', $text, $m)) {
+        $h = (int)$m[1];
+        $min = (int)$m[2];
+        $ampm = strtolower($m[3]);
+        if ($ampm === 'pm' && $h !== 12) $h += 12;
+        if ($ampm === 'am' && $h === 12) $h = 0;
+        return sprintf('%02d:%02d', $h, $min);
+    }
+    return '';
 }

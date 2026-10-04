@@ -1251,10 +1251,10 @@
                     if (data.description) document.getElementById('articleSummary').value = data.description;
                     if (data.image) document.getElementById('articleImage').value = data.image;
                     if (data.date) {
-                        const d = data.date.length === 10 ? data.date + 'T00:00' : data.date;
-                        const dt = new Date(d);
-                        document.getElementById('articleDate').value = dt.toISOString().split('T')[0];
-                        document.getElementById('articleTime').value = dt.toTimeString().slice(0, 5);
+                        const dateStr = data.date.length === 10 ? data.date : data.date.split('T')[0];
+                        const timeStr = data.time || '12:00';
+                        document.getElementById('articleDate').value = dateStr;
+                        document.getElementById('articleTime').value = timeStr.slice(0, 5);
                     }
                     
                     if (data.injured !== null && data.injured !== undefined) document.getElementById('articleInjured').value = data.injured;
@@ -1312,10 +1312,10 @@
                     const data = await response.json();
                     if (data.title) document.getElementById('updateTitle').value = data.title;
                     if (data.date) {
-                        const d = data.date.length === 10 ? data.date + 'T00:00' : data.date;
-                        const dt = new Date(d);
-                        document.getElementById('updateDate').value = dt.toISOString().split('T')[0];
-                        document.getElementById('updateTime').value = dt.toTimeString().slice(0, 5);
+                        const dateStr = data.date.length === 10 ? data.date : data.date.split('T')[0];
+                        const timeStr = data.time || '12:00';
+                        document.getElementById('updateDate').value = dateStr;
+                        document.getElementById('updateTime').value = timeStr.slice(0, 5);
                     }
                 }
             } catch (err) {}
@@ -1346,8 +1346,8 @@
                 const freshInjured = (freshData.injured !== null && freshData.injured !== undefined) ? freshData.injured : (item.injured_count || 0);
                 const freshKilled = (freshData.killed !== null && freshData.killed !== undefined) ? freshData.killed : (item.killed_count || 0);
                 const freshDateStr = freshData.date || item.published_at.split(' ')[0];
-                const freshDate = freshDateStr.length === 10 ? freshDateStr + 'T00:00' : freshDateStr;
-                const freshDt = new Date(freshDate);
+                const freshTimeStr = freshData.time || '12:00';
+                const freshDt = new Date(freshDateStr + 'T' + freshTimeStr);
 
                 const diffContainer = document.getElementById('diffContainer');
                 diffContainer.innerHTML = '';
