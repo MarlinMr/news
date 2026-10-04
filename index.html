@@ -305,6 +305,274 @@
             .date-pickers input[type="date"] { flex: 1; width: 45%; font-size: 11px; padding: 4px; }
 
             .sidebar, .sidebar-toggle-btn { display: none !important; }
+            .bottom-timeline { left: 8px !important; right: 8px !important; bottom: 8px !important; }
+        }
+
+        /* Bottom 1-Week Timeline Bar */
+        .bottom-timeline {
+            position: absolute;
+            bottom: 12px;
+            left: 16px;
+            right: 336px;
+            background: rgba(15, 23, 42, 0.94);
+            backdrop-filter: blur(10px);
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 8px 14px 10px 14px;
+            z-index: 850;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            transition: right 0.3s ease, max-height 0.25s ease, padding 0.25s ease;
+            user-select: none;
+            overflow: visible;
+        }
+
+        .sidebar.collapsed ~ .bottom-timeline,
+        .main-wrapper.sidebar-closed .bottom-timeline {
+            right: 16px;
+        }
+
+        .bottom-timeline.minimized .timeline-track-wrapper {
+            display: none;
+        }
+
+        .bottom-timeline.minimized {
+            padding-bottom: 8px;
+        }
+
+        .bottom-timeline-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            color: #f8fafc;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .timeline-title-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+        }
+
+        .timeline-title-group .timeline-title {
+            color: #f1f5f9;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .timeline-date-range {
+            color: #94a3b8;
+            font-size: 11px;
+            font-weight: 500;
+            background: #1e293b;
+            padding: 2px 8px;
+            border-radius: 4px;
+            border: 1px solid #334155;
+        }
+
+        .timeline-count-badge {
+            background: #0284c7;
+            color: #ffffff;
+            font-size: 10px;
+            padding: 2px 7px;
+            border-radius: 10px;
+            font-weight: 700;
+        }
+
+        .bottom-timeline-nav {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .btn-timeline-nav {
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #cbd5e1;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .btn-timeline-nav:hover {
+            background: #3b82f6;
+            color: #ffffff;
+            border-color: #3b82f6;
+        }
+
+        .btn-timeline-toggle {
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #94a3b8;
+            font-size: 12px;
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s ease;
+            margin-left: 4px;
+        }
+
+        .btn-timeline-toggle:hover {
+            color: #ffffff;
+            border-color: #475569;
+        }
+
+        .timeline-track-wrapper {
+            position: relative;
+            height: 48px;
+            margin-top: 10px;
+            margin-bottom: 2px;
+            padding: 0 12px;
+        }
+
+        .timeline-track-rail {
+            position: absolute;
+            top: 15px;
+            left: 12px;
+            right: 12px;
+            height: 4px;
+            background: #334155;
+            border-radius: 2px;
+        }
+
+        .timeline-day-markers {
+            position: absolute;
+            top: 0;
+            left: 12px;
+            right: 12px;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .timeline-day-tick {
+            position: absolute;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .timeline-day-tick-line {
+            width: 1px;
+            height: 12px;
+            background: #475569;
+            margin-top: 9px;
+        }
+
+        .timeline-day-tick-label {
+            font-size: 10px;
+            color: #94a3b8;
+            margin-top: 6px;
+            white-space: nowrap;
+            font-weight: 500;
+        }
+
+        .timeline-day-tick.today .timeline-day-tick-label {
+            color: #38bdf8;
+            font-weight: 700;
+        }
+
+        .timeline-dots-layer {
+            position: absolute;
+            top: 0;
+            left: 12px;
+            right: 12px;
+            height: 100%;
+            pointer-events: auto;
+        }
+
+        .timeline-dot {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            z-index: 20;
+            transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease;
+        }
+
+        .timeline-dot-incident {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #1e293b;
+            border: 2px solid #3b82f6;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+        }
+
+        .timeline-dot-update {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #0ea5e9;
+            border: 2px solid #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            box-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+            color: #ffffff;
+        }
+
+        .timeline-dot:hover {
+            transform: translate(-50%, -50%) scale(1.4);
+            z-index: 50;
+            filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.8));
+        }
+
+        .timeline-dot.active .timeline-dot-incident,
+        .timeline-dot.active .timeline-dot-update {
+            border-color: #f59e0b !important;
+            box-shadow: 0 0 12px #f59e0b !important;
+        }
+
+        /* Tooltip */
+        .timeline-tooltip {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #0f172a;
+            border: 1px solid #475569;
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 11px;
+            color: #f8fafc;
+            white-space: nowrap;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.7);
+            pointer-events: none;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.15s ease, visibility 0.15s ease, bottom 0.15s ease;
+            z-index: 100;
+        }
+
+        .timeline-dot:hover .timeline-tooltip {
+            opacity: 1;
+            visibility: visible;
+            bottom: 34px;
+        }
+
+        .timeline-empty-notice {
+            position: absolute;
+            top: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 11px;
+            color: #64748b;
+            font-style: italic;
+            pointer-events: none;
         }
     </style>
 </head>
@@ -395,6 +663,30 @@
         </div>
 
         <button class="sidebar-toggle-btn" id="sidebarToggleBtn" onclick="toggleSidebar()">▶</button>
+
+        <!-- BOTTOM 1-WEEK TIMELINE BAR -->
+        <div id="bottomTimeline" class="bottom-timeline">
+            <div class="bottom-timeline-header">
+                <div class="timeline-title-group">
+                    <span class="timeline-icon">⏱️</span>
+                    <span class="timeline-title">7-Day Incident Track</span>
+                    <span class="timeline-date-range" id="bottomTimelineRange">--</span>
+                    <span class="timeline-count-badge" id="bottomTimelineCount">0 events</span>
+                </div>
+                <div class="bottom-timeline-nav">
+                    <button type="button" class="btn-timeline-nav" onclick="shiftBottomTimelineWeek(-1)" title="Previous 7 days">◀ Prev Week</button>
+                    <button type="button" class="btn-timeline-nav" onclick="resetBottomTimelineWeek()" title="Reset to current week">Current Week</button>
+                    <button type="button" class="btn-timeline-nav" onclick="shiftBottomTimelineWeek(1)" title="Next 7 days">Next Week ▶</button>
+                    <button type="button" class="btn-timeline-toggle" onclick="toggleBottomTimeline()" id="btnToggleTimeline" title="Minimize / Expand Timeline">▾</button>
+                </div>
+            </div>
+
+            <div class="timeline-track-wrapper" id="timelineTrackWrapper">
+                <div class="timeline-track-rail"></div>
+                <div class="timeline-day-markers" id="timelineDayMarkers"></div>
+                <div class="timeline-dots-layer" id="timelineDotsLayer"></div>
+            </div>
+        </div>
     </div>
 
     <!-- ADD / EDIT MASTER ARTICLE MODAL -->
@@ -1265,6 +1557,7 @@
             });
 
             document.getElementById('feedCount').innerText = visibleCount;
+            renderBottomTimeline();
         }
 
         function focusIncident(id) {
@@ -1306,6 +1599,239 @@
                     alert("Location not found."); 
                 }
             } catch (err) {}
+        }
+
+        /* ==================================================================
+           BOTTOM 1-WEEK TIMELINE CONTROLS & RENDERING
+           ================================================================== */
+        let bottomTimelineWeekOffset = 0;
+        let bottomTimelineBaseDate = null;
+        let isBottomTimelineMinimized = false;
+
+        function getTimelineWeekRange() {
+            const base = bottomTimelineBaseDate ? new Date(bottomTimelineBaseDate) : new Date();
+            
+            // Set end of 7-day period (23:59:59)
+            const end = new Date(base);
+            end.setDate(end.getDate() + (bottomTimelineWeekOffset * 7));
+            end.setHours(23, 59, 59, 999);
+
+            // Start is 6 days prior (00:00:00) -> spans exactly 7 calendar days
+            const start = new Date(end);
+            start.setDate(start.getDate() - 6);
+            start.setHours(0, 0, 0, 0);
+
+            return { start, end };
+        }
+
+        function shiftBottomTimelineWeek(delta) {
+            bottomTimelineWeekOffset += delta;
+            renderBottomTimeline();
+        }
+
+        function resetBottomTimelineWeek() {
+            bottomTimelineWeekOffset = 0;
+            bottomTimelineBaseDate = new Date();
+            renderBottomTimeline();
+        }
+
+        function toggleBottomTimeline() {
+            isBottomTimelineMinimized = !isBottomTimelineMinimized;
+            const el = document.getElementById('bottomTimeline');
+            const btn = document.getElementById('btnToggleTimeline');
+            if (isBottomTimelineMinimized) {
+                el.classList.add('minimized');
+                btn.innerText = '▴';
+            } else {
+                el.classList.remove('minimized');
+                btn.innerText = '▾';
+            }
+        }
+
+        function renderBottomTimeline() {
+            const rangeEl = document.getElementById('bottomTimelineRange');
+            const countEl = document.getElementById('bottomTimelineCount');
+            const markersEl = document.getElementById('timelineDayMarkers');
+            const dotsEl = document.getElementById('timelineDotsLayer');
+
+            if (!rangeEl || !markersEl || !dotsEl) return;
+
+            // Anchor reference date: if not set, check if latest article is recent or historic
+            if (!bottomTimelineBaseDate && articlesData && articlesData.length > 0) {
+                let latestTime = 0;
+                articlesData.forEach(a => {
+                    const t = new Date(a.published_at).getTime();
+                    if (t > latestTime) latestTime = t;
+                });
+                const now = new Date().getTime();
+                // If latest article is within 30 days, anchor to today, else anchor to latest event date
+                if (latestTime > 0 && (now - latestTime) > (30 * 24 * 60 * 60 * 1000)) {
+                    bottomTimelineBaseDate = new Date(latestTime);
+                } else {
+                    bottomTimelineBaseDate = new Date();
+                }
+            }
+
+            const { start, end } = getTimelineWeekRange();
+
+            // Label range
+            const optMonthDay = { month: 'short', day: 'numeric' };
+            const optYear = { year: 'numeric' };
+            rangeEl.innerText = `${start.toLocaleDateString(undefined, optMonthDay)} – ${end.toLocaleDateString(undefined, optMonthDay)} ${end.toLocaleDateString(undefined, optYear)}`;
+
+            // Render 7 Day Markers
+            markersEl.innerHTML = '';
+            const todayStr = new Date().toDateString();
+
+            for (let i = 0; i < 7; i++) {
+                const d = new Date(start);
+                d.setDate(d.getDate() + i);
+
+                const pct = ((i + 0.5) / 7) * 100;
+                const isToday = (d.toDateString() === todayStr);
+
+                const tick = document.createElement('div');
+                tick.className = `timeline-day-tick ${isToday ? 'today' : ''}`;
+                tick.style.left = `${pct}%`;
+
+                const dayName = d.toLocaleDateString(undefined, { weekday: 'short' });
+                const dayNum = d.getDate();
+
+                tick.innerHTML = `
+                    <div class="timeline-day-tick-line"></div>
+                    <div class="timeline-day-tick-label">${dayName} ${dayNum}${isToday ? ' (Today)' : ''}</div>
+                `;
+                markersEl.appendChild(tick);
+            }
+
+            // Category filter
+            const selectEl = document.getElementById('categoryFilter');
+            const selectedOpt = selectEl ? selectEl.options[selectEl.selectedIndex] : null;
+            const selectedCatSlug = selectedOpt ? (selectedOpt.dataset.slug || 'all') : 'all';
+
+            // Collect matching incident and update dots
+            dotsEl.innerHTML = '';
+            const startTime = start.getTime();
+            const endTime = end.getTime();
+            const totalDuration = endTime - startTime;
+
+            let timelineEvents = [];
+
+            if (articlesData && articlesData.length > 0) {
+                articlesData.forEach(article => {
+                    const matchesCat = (selectedCatSlug === 'all' || article.category_slug === selectedCatSlug);
+                    if (!matchesCat) return;
+
+                    const artTime = new Date(article.published_at).getTime();
+                    if (artTime >= startTime && artTime <= endTime) {
+                        timelineEvents.push({
+                            type: 'incident',
+                            id: article.id,
+                            parentId: article.id,
+                            title: article.title,
+                            emoji: article.emoji || '📰',
+                            published_at: article.published_at,
+                            injured: parseInt(article.injured_count) || 0,
+                            killed: parseInt(article.killed_count) || 0,
+                            time: artTime
+                        });
+                    }
+
+                    if (article.updates && article.updates.length > 0) {
+                        article.updates.forEach(upd => {
+                            const updTime = new Date(upd.published_at).getTime();
+                            if (updTime >= startTime && updTime <= endTime) {
+                                timelineEvents.push({
+                                    type: 'update',
+                                    id: upd.id,
+                                    parentId: article.id,
+                                    parentTitle: article.title,
+                                    parentEmoji: article.emoji || '📰',
+                                    title: upd.title,
+                                    emoji: '🔄',
+                                    published_at: upd.published_at,
+                                    source: upd.source_name,
+                                    time: updTime
+                                });
+                            }
+                        });
+                    }
+                });
+            }
+
+            countEl.innerText = `${timelineEvents.length} event${timelineEvents.length === 1 ? '' : 's'}`;
+
+            if (timelineEvents.length === 0) {
+                const notice = document.createElement('div');
+                notice.className = 'timeline-empty-notice';
+                notice.innerText = 'No incidents logged in this 7-day window. Use ◀ Prev / Next ▶ to browse weeks.';
+                dotsEl.appendChild(notice);
+                return;
+            }
+
+            // Sort chronologically
+            timelineEvents.sort((a, b) => a.time - b.time);
+
+            // Render clickable dots with collision-aware vertical offset
+            timelineEvents.forEach((ev, idx) => {
+                const rawPct = ((ev.time - startTime) / totalDuration) * 100;
+                const pct = Math.max(1, Math.min(99, rawPct));
+
+                let isStaggered = false;
+                if (idx > 0) {
+                    const prevRawPct = ((timelineEvents[idx - 1].time - startTime) / totalDuration) * 100;
+                    if (Math.abs(rawPct - prevRawPct) < 3.2) {
+                        isStaggered = (idx % 2 === 1);
+                    }
+                }
+
+                const dot = document.createElement('div');
+                dot.className = 'timeline-dot';
+                dot.style.left = `${pct}%`;
+                if (isStaggered) {
+                    dot.style.top = '25px';
+                }
+
+                const pubDateObj = new Date(ev.published_at);
+                const timeFormatted = pubDateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const dateFormatted = pubDateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+
+                if (ev.type === 'incident') {
+                    dot.innerHTML = `
+                        <div class="timeline-dot-incident" title="${ev.title}">${ev.emoji}</div>
+                        <div class="timeline-tooltip">
+                            <strong>${ev.emoji} ${ev.title}</strong>
+                            <div style="color: #94a3b8; font-size: 10px; margin-top: 2px;">${dateFormatted} at ${timeFormatted}</div>
+                            ${(ev.injured > 0 || ev.killed > 0) ? `
+                                <div style="margin-top: 3px; font-size: 10px;">
+                                    ${ev.injured > 0 ? '<span style="color:#f59e0b">🩹 ' + ev.injured + ' Injured</span> ' : ''}
+                                    ${ev.killed > 0 ? '<span style="color:#ef4444">✝️ ' + ev.killed + ' Killed</span>' : ''}
+                                </div>
+                            ` : ''}
+                            <div style="color: #38bdf8; font-size: 9px; margin-top: 3px;">📍 Click to jump to map pin</div>
+                        </div>
+                    `;
+                } else {
+                    dot.innerHTML = `
+                        <div class="timeline-dot-update" title="Update: ${ev.title}">•</div>
+                        <div class="timeline-tooltip">
+                            <strong>🔄 Update: ${ev.title}</strong>
+                            <div style="color: #cbd5e1; font-size: 10px; margin-top: 2px;">For: ${ev.parentEmoji} ${ev.parentTitle}</div>
+                            <div style="color: #94a3b8; font-size: 10px; margin-top: 2px;">${dateFormatted} at ${timeFormatted} ${ev.source ? '• ' + ev.source : ''}</div>
+                            <div style="color: #38bdf8; font-size: 9px; margin-top: 3px;">📍 Click to jump to incident pin</div>
+                        </div>
+                    `;
+                }
+
+                dot.onclick = (e) => {
+                    e.stopPropagation();
+                    document.querySelectorAll('.timeline-dot').forEach(d => d.classList.remove('active'));
+                    dot.classList.add('active');
+                    focusIncident(ev.parentId);
+                };
+
+                dotsEl.appendChild(dot);
+            });
         }
 
         parseUrlParams();
