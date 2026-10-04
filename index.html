@@ -1028,7 +1028,7 @@
         const osmAttribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
         const TILE_PROVIDERS = {
             osm: { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attribution: osmAttribution, maxNativeZoom: 19 },
-            kartverket: { url: 'https://cache.kartverket.no/tiles/graatpoly/{z}/{x}/{y}.png', attribution: osmAttribution + ' &copy; <a href="https://kartverket.no">Kartverket</a>', maxNativeZoom: 19 }
+            kartverket: { url: 'https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png', attribution: osmAttribution + ' &copy; <a href="https://kartverket.no">Kartverket</a>', maxNativeZoom: 19 }
         };
         let activeTileLayer = null;
         function changeMapStyle(style) {
