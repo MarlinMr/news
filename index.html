@@ -614,14 +614,15 @@
                     <option value="graatone">Gråtonekart</option>
                     <option value="toporaster">Turkart</option>
                     <option value="sjokart">Sjøkart</option>
-                    <option value="openrailwaymap">OpenRailwayMap</option>
-                    <option value="opentopomap">OpenTopoMap</option>
                 </select>
             </div>
-            <label class="checkbox-label">
-                <input type="checkbox" id="railwayMapToggle" onclick="toggleRailwayMap()" checked>
-                Show OpenRailwayMap overlay
-            </label>
+            <div class="overlay-control">
+                <label for="overlaySelect">Overlay map</label>
+                <select id="overlaySelect" class="category-select" onchange="toggleOverlayMap(this.value)">
+                    <option value="">None</option>
+                    <option value="openrailwaymap">OpenRailwayMap</option>
+                </select>
+            </div>
         </div>
             <div class="search-box" id="searchBox">
                 <div class="search-tabs" role="tablist" aria-label="Search mode">
@@ -1062,13 +1063,20 @@
             subdomains: 'abc'
         });
         let railwayMapAdded = false;
-        function toggleRailwayMap() {
-            if (railwayMapAdded) {
+        function toggleOverlayMap(value) {
+            if (value === 'openrailwaymap') {
+                if (railwayMapAdded) {
+                    map.removeLayer(railwayMap);
+                    railwayMapAdded = false;
+                    document.getElementById('overlaySelect').value = '';
+                } else {
+                    map.addLayer(railwayMap);
+                    railwayMapAdded = true;
+                }
+            } else {
                 map.removeLayer(railwayMap);
                 railwayMapAdded = false;
-            } else {
-                map.addLayer(railwayMap);
-                railwayMapAdded = true;
+                document.getElementById('overlaySelect').value = '';
             }
         }
 
