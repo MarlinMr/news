@@ -1047,6 +1047,8 @@
             document.getElementById('mapStyle').value = style;
             try { localStorage.setItem('geonews-map-style', style); } catch (e) {}
         }
+        let initialMapStyle = 'osm';
+        try { initialMapStyle = localStorage.getItem('geonews-map-style') || 'osm'; } catch (e) {}
         changeMapStyle(initialMapStyle);
 
         const markersCluster = L.markerClusterGroup({ maxClusterRadius: 50 });
