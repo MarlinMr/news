@@ -605,7 +605,7 @@
             <div class="auth-bar" id="authBar"></div>
         </div>
 
-        <div class="controls-group">
+<div class="controls-group">
             <div class="map-style-control">
                 <label for="mapStyle">Map style</label>
                 <select id="mapStyle" class="category-select" onchange="changeMapStyle(this.value)">
@@ -617,6 +617,14 @@
                     <option value="opentopomap">OpenTopoMap</option>
                 </select>
             </div>
+            <div class="overlay-control">
+                <label for="overlaySelect">Overlay map</label>
+                <select id="overlaySelect" class="category-select" onchange="toggleOverlayMap(this.value)">
+                    <option value="">None</option>
+                    <option value="openrailwaymap">OpenRailwayMap</option>
+                </select>
+            </div>
+        </div>
             
                 <div class="search-tabs" role="tablist" aria-label="Search mode">
                     <button type="button" class="search-tab active" role="tab" aria-selected="true" aria-controls="location-search-panel" id="tab-location" onclick="switchSearchTab('location')">📍 Location</button>
@@ -1050,6 +1058,29 @@
         let initialMapStyle = 'osm';
         try { initialMapStyle = localStorage.getItem('geonews-map-style') || 'osm'; } catch (e) {}
         changeMapStyle(initialMapStyle);
+
+        const railwayMap = L.tileLayer('https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://openrailwaymap.org">OpenRailwayMap</a>',
+            maxZoom: 19,
+            subdomains: 'abc'
+        });
+        let railwayMapAdded = false;
+        function toggleOverlayMap(value) {
+            if (value === 'openrailwaymap') {
+                if (railwayMapAdded) {
+                    map.removeLayer(railwayMap);
+                    railwayMapAdded = false;
+                    document.getElementById('overlaySelect').value = '';
+                } else {
+                    map.addLayer(railwayMap);
+                    railwayMapAdded = true;
+                }
+            } else {
+                map.removeLayer(railwayMap);
+                railwayMapAdded = false;
+                document.getElementById('overlaySelect').value = '';
+            }
+        }
 
         const markersCluster = L.markerClusterGroup({ maxClusterRadius: 50 });
 
