@@ -43,6 +43,8 @@
         .controls-group { display: flex; gap: 8px; flex-shrink: 0; }
         .map-style-control { display: flex; flex-direction: column; justify-content: center; gap: 4px; }
         .map-style-control label { font-size: 11px; color: #94a3b8; }
+        .overlay-control { display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+        .overlay-control label { font-size: 11px; color: #94a3b8; }
 
         .category-select, .search-box input {
             padding: 6px 10px;
@@ -1083,6 +1085,7 @@
         }
 
         const markersCluster = L.markerClusterGroup({ maxClusterRadius: 50 });
+        map.addLayer(markersCluster);
 
         function parseUrlParams() {
             const params = new URLSearchParams(window.location.search);
