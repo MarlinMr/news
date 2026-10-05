@@ -618,6 +618,11 @@
                     <option value="opentopomap">OpenTopoMap</option>
                 </select>
             </div>
+            <label class="checkbox-label">
+                <input type="checkbox" id="railwayMapToggle" onclick="toggleRailwayMap()" checked>
+                Show OpenRailwayMap overlay
+            </label>
+        </div>
             <div class="search-box" id="searchBox">
                 <div class="search-tabs" role="tablist" aria-label="Search mode">
                     <button type="button" class="search-tab active" role="tab" aria-selected="true" aria-controls="location-search-panel" id="tab-location" onclick="switchSearchTab('location')">📍 Location</button>
@@ -1036,22 +1041,36 @@
             topo: { url: 'https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png', attribution: osmAttribution + ' &copy; <a href="https://kartverket.no">Kartverket</a>', maxNativeZoom: 19 },
             graatone: { url: 'https://cache.kartverket.no/v1/wmts/1.0.0/topograatone/default/webmercator/{z}/{y}/{x}.png', attribution: osmAttribution + ' &copy; <a href="https://kartverket.no">Kartverket</a>', maxNativeZoom: 19 },
             toporaster: { url: 'https://cache.kartverket.no/v1/wmts/1.0.0/toporaster/default/webmercator/{z}/{y}/{x}.png', attribution: osmAttribution + ' &copy; <a href="https://kartverket.no">Kartverket</a>', maxNativeZoom: 19 },
-            sjokart: { url: 'https://cache.kartverket.no/v1/wmts/1.0.0/sjokartraster/default/webmercator/{z}/{y}/{x}.png', attribution: osmAttribution + ' &copy; <a href="https://kartverket.no">Kartverket</a>', maxNativeZoom: 19 },
-            openrailwaymap: { url: 'https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png', attribution: '&copy; <a href="https://openrailwaymap.org">OpenRailwayMap</a>', maxNativeZoom: 19, subdomains: 'abc' },
-            opentopomap: { url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', attribution: '&copy; <a href="https://opentopomap.org">OpenTopoMap</a>', maxNativeZoom: 19, subdomains: 'abc' }
+            sjokart: { url: 'https://cache.kartverket.no/v1/wmts/1.0.0/sjokartraster/default/webmercator/{z}/{y}/{x}.png', attribution: osmAttribution + ' &copy; <a href="https://kartverket.no">Kartverket</a>', maxNativeZoom: 19 }
         };
-        let activeTileLayer = null;
+        let activeBaseLayer = null;
         function changeMapStyle(style) {
             if (!Object.prototype.hasOwnProperty.call(TILE_PROVIDERS, style)) style = 'osm';
             const { url, ...options } = TILE_PROVIDERS[style];
-            if (activeTileLayer) map.removeLayer(activeTileLayer);
-            activeTileLayer = L.tileLayer(url, { ...options, maxZoom: 20 }).addTo(map);
+            if (activeBaseLayer) map.removeLayer(activeBaseLayer);
+            activeBaseLayer = L.tileLayer(url, { ...options, maxZoom: 20 }).addTo(map);
             document.getElementById('mapStyle').value = style;
             try { localStorage.setItem('geonews-map-style', style); } catch (e) {}
         }
         let initialMapStyle = 'osm';
         try { initialMapStyle = localStorage.getItem('geonews-map-style') || 'osm'; } catch (e) {}
         changeMapStyle(initialMapStyle);
+
+        const railwayMap = L.tileLayer('https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://openrailwaymap.org">OpenRailwayMap</a>',
+            maxZoom: 19,
+            subdomains: 'abc'
+        });
+        let railwayMapAdded = false;
+        function toggleRailwayMap() {
+            if (railwayMapAdded) {
+                map.removeLayer(railwayMap);
+                railwayMapAdded = false;
+            } else {
+                map.addLayer(railwayMap);
+                railwayMapAdded = true;
+            }
+        }
 
         const markersCluster = L.markerClusterGroup({ maxClusterRadius: 50 });
         map.addLayer(markersCluster);
