@@ -874,6 +874,7 @@
     <div class="modal-overlay" id="updateModal">
         <div class="modal">
             <h3>Add Article Update to Event Timeline</h3>
+            <button type="button" onclick="openCommentModal(document.getElementById('parentArticleId').value)">Write a comment instead</button>
             
             <label for="updateUrl">Follow-up Article URL</label>
             <input type="url" id="updateUrl" placeholder="Paste news link here..." onchange="fetchUpdateMetadata(this.value)">
@@ -901,6 +902,19 @@
     </div>
 
     <!-- AUTH MODAL -->
+    <div class="modal-overlay" id="commentModal">
+        <div class="modal">
+            <h3>Comment update</h3>
+            <label for="commentBody">Comment</label>
+            <textarea id="commentBody" rows="6" maxlength="5000" placeholder="Write an update about this incident..."></textarea>
+            <input type="hidden" id="commentArticleId">
+            <input type="hidden" id="commentId">
+            <div class="modal-buttons">
+                <button class="btn-cancel" onclick="closeModal('commentModal')">Cancel</button>
+                <button class="btn-submit" onclick="saveComment()">Save comment</button>
+            </div>
+        </div>
+    </div>
     <div class="modal-overlay" id="authModal">
         <div class="modal">
             <h3 id="authModalTitle">Sign In</h3>
@@ -1606,6 +1620,41 @@
             }
         }
 
+        function escapeComment(value) {
+            return String(value || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        function openCommentModal(articleId, commentId = '') {
+            if (!currentUser) { openAuthModal(); return; }
+            const article = articlesData.find(a => a.id == articleId);
+            const comment = article?.updates?.find(u => u.type === 'comment' && u.id == commentId);
+            document.getElementById('commentArticleId').value = articleId;
+            document.getElementById('commentId').value = commentId;
+            document.getElementById('commentBody').value = comment?.body || '';
+            closeModal('updateModal');
+            document.getElementById('commentModal').style.display = 'flex';
+        }
+
+        async function saveComment() {
+            const id = document.getElementById('commentId').value;
+            const body = document.getElementById('commentBody').value.trim();
+            if (!body) { alert('Please enter a comment.'); return; }
+            const res = await fetch('api/articles.php', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: id ? 'edit_comment' : 'add_comment', id: Number(id), article_id: Number(document.getElementById('commentArticleId').value), body })
+            });
+            if (!res.ok) { alert((await res.json()).error || 'Failed to save comment'); return; }
+            closeModal('commentModal');
+            fetchArticlesFromAPI();
+        }
+
+        async function deleteComment(id) {
+            if (!confirm('Delete this comment?')) return;
+            const res = await fetch(`api/articles.php?type=comment&id=${id}`, { method: 'DELETE' });
+            if (!res.ok) { alert((await res.json()).error || 'Failed to delete comment'); return; }
+            fetchArticlesFromAPI();
+        }
+
         async function deleteArticle(id) {
             if (!confirm("Are you sure you want to delete this news pin?")) return;
             const res = await fetch(`api/articles.php?id=${id}`, { method: 'DELETE' });
@@ -1682,6 +1731,17 @@
                                 <ul class="timeline-list">
                         `;
                         item.updates.forEach(upd => {
+                            if (upd.type === 'comment') {
+                                const isAuthor = currentUser && currentUser.id == upd.user_id;
+                                const canDelete = currentUser && (isAuthor || currentUser.id == item.user_id || ['admin', 'moderator'].includes(currentUser.role));
+                                updatesHtml += `<li class="timeline-item">
+                                    <div class="timeline-item-date">💬 ${parsePublishDate(upd.published_at).toLocaleString(undefined, { timeZone: APP_TIMEZONE })} • ${escapeComment(upd.author)}</div>
+                                    <div style="white-space:pre-wrap;overflow-wrap:anywhere;">${escapeComment(upd.body)}</div>
+                                    ${isAuthor ? `<button onclick="openCommentModal(${item.id}, ${upd.id})">Edit</button>` : ''}
+                                    ${canDelete ? `<button onclick="deleteComment(${upd.id})">Delete</button>` : ''}
+                                </li>`;
+                                return;
+                            }
                             const updDate = parsePublishDate(upd.published_at).toLocaleDateString(undefined, { timeZone: APP_TIMEZONE });
                             const canDelUpd = currentUser && (currentUser.id == upd.user_id || ['admin', 'moderator'].includes(currentUser.role));
                             updatesHtml += `
@@ -2032,7 +2092,7 @@
                                     parentTitle: article.title,
                                     parentEmoji: article.emoji || '📰',
                                     title: upd.title,
-                                    emoji: '🔄',
+                                    emoji: upd.type === 'comment' ? '💬' : '🔄',
                                     published_at: upd.published_at,
                                     source: upd.source_name,
                                     time: updTime

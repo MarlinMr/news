@@ -118,6 +118,12 @@ if ($method === 'GET') {
         ");
         $updateStmt->execute($articleIds);
         $allUpdates = $updateStmt->fetchAll();
+        foreach ($allUpdates as &$update) { $update['type'] = 'article'; }
+        unset($update);
+        $commentStmt = $pdo->prepare("SELECT c.id, c.article_id, c.user_id, c.body, c.body AS title, '' AS url, '' AS source_name, c.published_at, u.username AS author, 'comment' AS type FROM article_comments c LEFT JOIN users u ON c.user_id = u.id WHERE c.article_id IN ($inQuery)");
+        $commentStmt->execute($articleIds);
+        $allUpdates = array_merge($allUpdates, $commentStmt->fetchAll());
+        usort($allUpdates, fn($a, $b) => strcmp($a['published_at'], $b['published_at']));
         $updatesByArticle = [];
         foreach ($allUpdates as $upd) { $updatesByArticle[$upd['article_id']][] = $upd; }
         foreach ($articles as &$art) { $art['updates'] = $updatesByArticle[$art['id']] ?? []; }
@@ -142,6 +148,33 @@ $currentUserRole = $_SESSION['user_role'] ?? 'user';
 // ------------------------------------------------------------------
 if ($method === 'POST') {
     $input = json_decode(file_get_contents('php://input'), true);
+
+    if (in_array($input['action'] ?? '', ['add_comment', 'edit_comment'], true)) {
+        $body = trim($input['body'] ?? '');
+        if ($body === '' || mb_strlen($body) > 5000) {
+            http_response_code(400); echo json_encode(['error' => 'Comment must contain 1–5000 characters']); exit;
+        }
+        if ($input['action'] === 'edit_comment') {
+            $id = (int)($input['id'] ?? 0);
+            $stmt = $pdo->prepare('SELECT user_id FROM article_comments WHERE id = ?');
+            $stmt->execute([$id]);
+            $comment = $stmt->fetch();
+            if (!$comment || $comment['user_id'] != $currentUserId) {
+                http_response_code($comment ? 403 : 404); echo json_encode(['error' => 'Only the author can edit this comment']); exit;
+            }
+            $stmt = $pdo->prepare('UPDATE article_comments SET body = ? WHERE id = ?');
+            $stmt->execute([$body, $id]);
+        } else {
+            $articleId = (int)($input['article_id'] ?? 0);
+            $stmt = $pdo->prepare('SELECT id FROM articles WHERE id = ?');
+            $stmt->execute([$articleId]);
+            if (!$stmt->fetch()) { http_response_code(404); echo json_encode(['error' => 'Article not found']); exit; }
+            $stmt = $pdo->prepare('INSERT INTO article_comments (article_id, user_id, body, published_at) VALUES (?, ?, ?, ?)');
+            $stmt->execute([$articleId, $currentUserId, $body, date('Y-m-d H:i:s')]);
+            $id = (int)$pdo->lastInsertId();
+        }
+        echo json_encode(['message' => 'Comment saved', 'id' => $id]); exit;
+    }
 
     if (($input['action'] ?? '') === 'move_pin') {
         $id = (int)($input['id'] ?? 0);
@@ -238,6 +271,18 @@ if ($method === 'DELETE') {
     $type = $_GET['type'] ?? 'article';
     $id   = isset($_GET['id']) ? (int)$_GET['id'] : 0;
     if ($id <= 0) { http_response_code(400); echo json_encode(['error' => 'Invalid ID']); exit; }
+    if ($type === 'comment') {
+        $stmt = $pdo->prepare('SELECT c.user_id, a.user_id AS owner_id FROM article_comments c JOIN articles a ON a.id = c.article_id WHERE c.id = ?');
+        $stmt->execute([$id]);
+        $comment = $stmt->fetch();
+        if (!$comment) { http_response_code(404); echo json_encode(['error' => 'Comment not found']); exit; }
+        if ($comment['user_id'] != $currentUserId && $comment['owner_id'] != $currentUserId && !in_array($currentUserRole, ['moderator', 'admin'])) {
+            http_response_code(403); echo json_encode(['error' => 'Forbidden']); exit;
+        }
+        $stmt = $pdo->prepare('DELETE FROM article_comments WHERE id = ?');
+        $stmt->execute([$id]);
+        echo json_encode(['message' => 'Comment deleted']); exit;
+    }
     if ($type === 'update') {
         $checkStmt = $pdo->prepare("SELECT user_id FROM article_updates WHERE id = :id");
         $checkStmt->execute(['id' => $id]);

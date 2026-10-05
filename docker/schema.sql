@@ -7,6 +7,7 @@ SET CHARACTER SET utf8mb4;
 
 -- Drop existing tables if re-initializing
 DROP TABLE IF EXISTS `article_updates`;
+DROP TABLE IF EXISTS `article_comments`;
 DROP TABLE IF EXISTS `articles`;
 DROP TABLE IF EXISTS `users`;
 
@@ -52,6 +53,16 @@ CREATE TABLE `article_updates` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Seed Sample Users (password is 'password123' for all, using PHP native $2y$ BCRYPT prefix)
+CREATE TABLE article_comments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    article_id INT NOT NULL,
+    user_id INT NOT NULL,
+    body TEXT NOT NULL,
+    published_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 INSERT INTO `users` (`id`, `username`, `email`, `password_hash`, `role`) VALUES
 (1, 'admin', 'admin@geonews.local', '$2y$10$o.PmwSmlXpFcn36sIMH45OZYuwOLPgYO.Sdo/Gk/Q/wm.6I9WR/CS', 'admin'),
 (2, 'moderator', 'mod@geonews.local', '$2y$10$o.PmwSmlXpFcn36sIMH45OZYuwOLPgYO.Sdo/Gk/Q/wm.6I9WR/CS', 'moderator'),
