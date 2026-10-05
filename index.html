@@ -615,6 +615,7 @@
                     <option value="toporaster">Turkart</option>
                     <option value="sjokart">Sjøkart</option>
                     <option value="openrailwaymap">OpenRailwayMap</option>
+                    <option value="opentopomap">OpenTopoMap</option>
                 </select>
             </div>
             <div class="search-box" id="searchBox">
@@ -1036,7 +1037,8 @@
             graatone: { url: 'https://cache.kartverket.no/v1/wmts/1.0.0/topograatone/default/webmercator/{z}/{y}/{x}.png', attribution: osmAttribution + ' &copy; <a href="https://kartverket.no">Kartverket</a>', maxNativeZoom: 19 },
             toporaster: { url: 'https://cache.kartverket.no/v1/wmts/1.0.0/toporaster/default/webmercator/{z}/{y}/{x}.png', attribution: osmAttribution + ' &copy; <a href="https://kartverket.no">Kartverket</a>', maxNativeZoom: 19 },
             sjokart: { url: 'https://cache.kartverket.no/v1/wmts/1.0.0/sjokartraster/default/webmercator/{z}/{y}/{x}.png', attribution: osmAttribution + ' &copy; <a href="https://kartverket.no">Kartverket</a>', maxNativeZoom: 19 },
-            openrailwaymap: { url: 'https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png', attribution: '&copy; <a href="https://openrailwaymap.org">OpenRailwayMap</a>', maxNativeZoom: 19, subdomains: 'abcd' }
+            openrailwaymap: { url: 'https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png', attribution: '&copy; <a href="https://openrailwaymap.org">OpenRailwayMap</a>', maxNativeZoom: 19, subdomains: 'abcd' },
+            opentopomap: { url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', attribution: '&copy; <a href="https://opentopomap.org">OpenTopoMap</a>', maxNativeZoom: 19, subdomains: 'abcd' }
         };
         let activeTileLayer = null;
         function changeMapStyle(style) {
