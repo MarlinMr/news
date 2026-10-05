@@ -614,17 +614,10 @@
                     <option value="graatone">Gråtonekart</option>
                     <option value="toporaster">Turkart</option>
                     <option value="sjokart">Sjøkart</option>
+                    <option value="opentopomap">OpenTopoMap</option>
                 </select>
             </div>
-            <div class="overlay-control">
-                <label for="overlaySelect">Overlay map</label>
-                <select id="overlaySelect" class="category-select" onchange="toggleOverlayMap(this.value)">
-                    <option value="">None</option>
-                    <option value="openrailwaymap">OpenRailwayMap</option>
-                </select>
-            </div>
-        </div>
-            <div class="search-box" id="searchBox">
+            
                 <div class="search-tabs" role="tablist" aria-label="Search mode">
                     <button type="button" class="search-tab active" role="tab" aria-selected="true" aria-controls="location-search-panel" id="tab-location" onclick="switchSearchTab('location')">📍 Location</button>
                     <button type="button" class="search-tab" role="tab" aria-selected="false" aria-controls="incident-search-panel" id="tab-incident" onclick="switchSearchTab('incident')">📰 Incidents</button>
@@ -1042,7 +1035,8 @@
             topo: { url: 'https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png', attribution: osmAttribution + ' &copy; <a href="https://kartverket.no">Kartverket</a>', maxNativeZoom: 19 },
             graatone: { url: 'https://cache.kartverket.no/v1/wmts/1.0.0/topograatone/default/webmercator/{z}/{y}/{x}.png', attribution: osmAttribution + ' &copy; <a href="https://kartverket.no">Kartverket</a>', maxNativeZoom: 19 },
             toporaster: { url: 'https://cache.kartverket.no/v1/wmts/1.0.0/toporaster/default/webmercator/{z}/{y}/{x}.png', attribution: osmAttribution + ' &copy; <a href="https://kartverket.no">Kartverket</a>', maxNativeZoom: 19 },
-            sjokart: { url: 'https://cache.kartverket.no/v1/wmts/1.0.0/sjokartraster/default/webmercator/{z}/{y}/{x}.png', attribution: osmAttribution + ' &copy; <a href="https://kartverket.no">Kartverket</a>', maxNativeZoom: 19 }
+            sjokart: { url: 'https://cache.kartverket.no/v1/wmts/1.0.0/sjokartraster/default/webmercator/{z}/{y}/{x}.png', attribution: osmAttribution + ' &copy; <a href="https://kartverket.no">Kartverket</a>', maxNativeZoom: 19 },
+            opentopomap: { url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', attribution: '&copy; <a href="https://opentopomap.org">OpenTopoMap</a>', maxNativeZoom: 19, subdomains: 'abc' }
         };
         let activeBaseLayer = null;
         function changeMapStyle(style) {
@@ -1053,35 +1047,9 @@
             document.getElementById('mapStyle').value = style;
             try { localStorage.setItem('geonews-map-style', style); } catch (e) {}
         }
-        let initialMapStyle = 'osm';
-        try { initialMapStyle = localStorage.getItem('geonews-map-style') || 'osm'; } catch (e) {}
         changeMapStyle(initialMapStyle);
 
-        const railwayMap = L.tileLayer('https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://openrailwaymap.org">OpenRailwayMap</a>',
-            maxZoom: 19,
-            subdomains: 'abc'
-        });
-        let railwayMapAdded = false;
-        function toggleOverlayMap(value) {
-            if (value === 'openrailwaymap') {
-                if (railwayMapAdded) {
-                    map.removeLayer(railwayMap);
-                    railwayMapAdded = false;
-                    document.getElementById('overlaySelect').value = '';
-                } else {
-                    map.addLayer(railwayMap);
-                    railwayMapAdded = true;
-                }
-            } else {
-                map.removeLayer(railwayMap);
-                railwayMapAdded = false;
-                document.getElementById('overlaySelect').value = '';
-            }
-        }
-
         const markersCluster = L.markerClusterGroup({ maxClusterRadius: 50 });
-        map.addLayer(markersCluster);
 
         function parseUrlParams() {
             const params = new URLSearchParams(window.location.search);
