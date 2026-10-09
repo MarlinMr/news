@@ -1,0 +1,6 @@
+.git
+.env
+.env.*
+api/db.php
+api/config.php
+pdf

@@ -47,6 +47,13 @@ header('Content-Type: application/json; charset=utf-8');
 
 $method = $_SERVER['REQUEST_METHOD'];
 
+function articleUrl($value) {
+    if (is_string($value) && preg_match('#^/?pdf/[a-f0-9]{32}\.pdf$#D', $value)) {
+        return is_file(dirname(__DIR__) . '/' . ltrim($value, '/')) ? $value : false;
+    }
+    return filter_var($value, FILTER_VALIDATE_URL);
+}
+
 // Master mapping of shortname slugs to Windows-compatible emojis.
 $categoryEmojiMap = [
     'general'        => '📰',
@@ -203,7 +210,7 @@ if ($method === 'POST') {
     if (isset($input['action']) && $input['action'] === 'add_update') {
         $articleId = (int)($input['article_id'] ?? 0);
         $title     = trim($input['title'] ?? '');
-        $url       = filter_var($input['url'] ?? '', FILTER_VALIDATE_URL);
+        $url       = articleUrl($input['url'] ?? '');
         $source    = trim($input['source_name'] ?? '');
         $pubDate   = !empty($input['published_at']) ? $input['published_at'] : date('Y-m-d H:i:s');
         if ($articleId <= 0 || empty($title) || !$url) { http_response_code(400); echo json_encode(['error' => 'Invalid update payload']); exit; }
@@ -219,7 +226,7 @@ if ($method === 'POST') {
     $articleId    = (isset($input['id']) && !empty($input['id'])) ? (int)$input['id'] : null;
     $title        = trim($input['title']);
     $summary      = trim($input['summary'] ?? '');
-    $url          = filter_var($input['url'], FILTER_VALIDATE_URL);
+    $url          = articleUrl($input['url']);
     $imageUrl     = !empty($input['image_url']) ? filter_var($input['image_url'], FILTER_VALIDATE_URL) : null;
     $latitude     = (float)$input['latitude'];
     $longitude    = (float)$input['longitude'];

@@ -767,6 +767,8 @@
 
             <label for="articleUrl">Article URL</label>
             <input type="url" id="articleUrl" placeholder="Paste link here..." onchange="fetchMetadata(this.value)">
+            <label for="articlePdf">Or upload a PDF (maximum 20 MB)</label>
+            <input type="file" id="articlePdf" accept="application/pdf,.pdf" onchange="selectPdf('article')">
 
             <!-- COORDINATES DISPLAY & SUGGESTED LOCATION -->
             <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px; margin-top: 10px; font-size: 12px;">
@@ -878,6 +880,8 @@
             
             <label for="updateUrl">Follow-up Article URL</label>
             <input type="url" id="updateUrl" placeholder="Paste news link here..." onchange="fetchUpdateMetadata(this.value)">
+            <label for="updatePdf">Or upload a PDF (maximum 20 MB)</label>
+            <input type="file" id="updatePdf" accept="application/pdf,.pdf" onchange="selectPdf('update')">
 
             <label for="updateTitle">Update Title / Headline</label>
             <input type="text" id="updateTitle" placeholder="e.g. Police confirm road reopened">
@@ -946,7 +950,42 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
+    <script src="api/runtime-config.php"></script>
     <script>
+        const runtimeConfig = window.GEONEWS_CONFIG || {};
+        function nominatimSearchUrl(query) {
+            const base = runtimeConfig.nominatimUrl || 'https://nominatim.openstreetmap.org';
+            const url = new URL(base.replace(/\/$/, '') + '/search');
+            url.searchParams.set('format', 'json');
+            url.searchParams.set('q', query);
+            return url.toString();
+        }
+        function selectPdf(prefix) {
+            const file = document.getElementById(prefix + 'Pdf').files[0];
+            if (!file) return;
+            document.getElementById(prefix + 'Url').value = '';
+            if (!document.getElementById(prefix + 'Title').value) {
+                document.getElementById(prefix + 'Title').value = file.name.replace(/\.pdf$/i, '');
+            }
+        }
+        async function uploadSelectedPdf(prefix) {
+            const input = document.getElementById(prefix + 'Pdf');
+            const file = input.files[0];
+            if (!file) return true;
+            const body = new FormData();
+            body.append('pdf', file);
+            try {
+                const res = await fetch('api/upload.php', { method: 'POST', body });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'PDF upload failed');
+                document.getElementById(prefix + 'Url').value = data.url;
+                input.value = '';
+                return true;
+            } catch (err) {
+                alert(err.message);
+                return false;
+            }
+        }
         const APP_TIMEZONE = 'Europe/Oslo';
         function osloParts(date = new Date()) {
             const parts = new Intl.DateTimeFormat('en-GB', {
@@ -1063,6 +1102,18 @@
             opentopomap: { url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', attribution: '&copy; <a href="https://opentopomap.org">OpenTopoMap</a>', maxNativeZoom: 19, subdomains: 'abc' }
         };
         let activeBaseLayer = null;
+        Object.entries(runtimeConfig.tileServers || {}).forEach(([key, provider]) => {
+            if (!provider || typeof provider.url !== 'string') return;
+            const { name, ...options } = provider;
+            TILE_PROVIDERS[key] = { ...TILE_PROVIDERS[key], ...options };
+            const select = document.getElementById('mapStyle');
+            const existing = Array.from(select.options).find(option => option.value === key);
+            if (existing) { if (name) existing.textContent = name; }
+            else select.add(new Option(name || key, key));
+        });
+        if (runtimeConfig.tileServerUrl) {
+            TILE_PROVIDERS.osm = { url: runtimeConfig.tileServerUrl, attribution: runtimeConfig.tileServerAttribution || '', maxNativeZoom: 19 };
+        }
         function changeMapStyle(style) {
             if (!Object.prototype.hasOwnProperty.call(TILE_PROVIDERS, style)) style = 'osm';
             const { url, ...options } = TILE_PROVIDERS[style];
@@ -1075,7 +1126,7 @@
         try { initialMapStyle = localStorage.getItem('geonews-map-style') || 'osm'; } catch (e) {}
         changeMapStyle(initialMapStyle);
 
-        const railwayMap = L.tileLayer('https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png', {
+        const railwayMap = L.tileLayer(runtimeConfig.railwayTileUrl || 'https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png', {
             attribution: '&copy; <a href="https://openrailwaymap.org">OpenRailwayMap</a>',
             maxZoom: 19,
             subdomains: 'abc'
@@ -1250,6 +1301,7 @@
         function closeModal(modalId) { document.getElementById(modalId).style.display = 'none'; }
         function clearModalInputs() {
             document.getElementById('articleUrl').value = '';
+            document.getElementById('articlePdf').value = '';
             document.getElementById('articleTitle').value = '';
             document.getElementById('articleSummary').value = '';
             document.getElementById('articleImage').value = '';
@@ -1315,6 +1367,7 @@
             if (!item) return;
 
             document.getElementById('modalTitle').innerText = 'Edit News Article';
+            document.getElementById('articlePdf').value = '';
             document.getElementById('editingArticleId').value = item.id;
             document.getElementById('articleTitle').value = item.title;
             document.getElementById('articleSummary').value = item.summary || '';
@@ -1347,6 +1400,7 @@
             }
             document.getElementById('parentArticleId').value = parentArticleId;
             document.getElementById('updateUrl').value = '';
+            document.getElementById('updatePdf').value = '';
             document.getElementById('updateTitle').value = '';
             document.getElementById('updateSource').value = '';
             const now = new Date();
@@ -1382,7 +1436,7 @@
 
         async function geocodeLocation(placeName) {
             try {
-                const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(placeName)}`);
+                const res = await fetch(nominatimSearchUrl(placeName));
                 const results = await res.json();
 
                 if (results && results.length > 0) {
@@ -1560,6 +1614,8 @@
         }
 
         async function saveArticle() {
+            if (!document.getElementById('articleTitle').value.trim()) { alert('Please enter a title.'); return; }
+            if (!await uploadSelectedPdf('article')) return;
             const articleId = document.getElementById('editingArticleId').value;
             const dateVal = document.getElementById('articleDate').value;
             const timeVal = document.getElementById('articleTime').value || '12:00';
@@ -1594,6 +1650,8 @@
         }
 
         async function saveTimelineUpdate() {
+            if (!document.getElementById('updateTitle').value.trim()) { alert('Please enter a title.'); return; }
+            if (!await uploadSelectedPdf('update')) return;
             const dateVal = document.getElementById('updateDate').value;
             const timeVal = document.getElementById('updateTime').value || '12:00';
             const payload = {
@@ -1886,7 +1944,7 @@
             if (!query) return;
 
             try {
-                const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+                const response = await fetch(nominatimSearchUrl(query));
                 const results = await response.json();
 
                 if (results && results.length > 0) {

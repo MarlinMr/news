@@ -8,12 +8,18 @@ services:
     ports:
       - "8080:80"
     environment:
-      DB_HOST: db
-      DB_NAME: geonews
-      DB_USER: geonews_user
-      DB_PASS: geonews_password
+      MARIADB_HOST: ${MARIADB_HOST:-db}
+      MARIADB_PORT: ${MARIADB_PORT:-3306}
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-geonews}
+      MARIADB_USER: ${MARIADB_USER:-geonews_user}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD:-geonews_password}
+      NOMINATIM_URL: ${NOMINATIM_URL:-https://nominatim.openstreetmap.org}
+      TILE_SERVER_URL: ${TILE_SERVER_URL:-}
+      TILE_SERVER_ATTRIBUTION: ${TILE_SERVER_ATTRIBUTION:-}
+      TILE_SERVERS: ${TILE_SERVERS:-}
+      RAILWAY_TILE_URL: ${RAILWAY_TILE_URL:-}
     volumes:
-      - .:/var/www/html
+      - pdf_data:/pdf
     depends_on:
       db:
         condition: service_healthy
@@ -24,10 +30,10 @@ services:
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: root_secret_pass
-      MYSQL_DATABASE: geonews
-      MYSQL_USER: geonews_user
-      MYSQL_PASSWORD: geonews_password
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-root_secret_pass}
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-geonews}
+      MARIADB_USER: ${MARIADB_USER:-geonews_user}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD:-geonews_password}
     volumes:
       - ./docker/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - db_data:/var/lib/mysql
@@ -41,3 +47,4 @@ services:
 
 volumes:
   db_data:
+  pdf_data:

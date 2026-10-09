@@ -3,6 +3,7 @@ api/db.php
 api/config.php
 .env
 .env.*
+/pdf/
 
 # OS & Editor files
 .DS_Store
