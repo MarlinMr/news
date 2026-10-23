@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Export / Import — GeoNews</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; background: #0f172a; color: #f8fafc; font: 15px/1.6 system-ui, sans-serif; }
+        header, main { max-width: 850px; margin: auto; padding: 20px; }
+        header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+        h1 { font-size: 24px; } h2 { font-size: 20px; }
+        a { color: #7dd3fc; }
+        section { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+        p { color: #cbd5e1; }
+        .fields { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 20px; }
+        label { display: flex; flex-direction: column; gap: 6px; }
+        input { max-width: 100%; padding: 8px; background: #0f172a; border: 1px solid #64748b; border-radius: 4px; color: white; font: inherit; }
+        button { background: #2563eb; color: white; border: 1px solid #60a5fa; padding: 10px 16px; border-radius: 5px; font: inherit; cursor: pointer; }
+        button:disabled { opacity: .5; cursor: default; }
+        .error { color: #fca5a5; } .success { color: #86efac; }
+        [hidden] { display: none !important; }
+    </style>
+</head>
+<body>
+<header><h1>Export / Import</h1><a href="index.html">Back to map / sign in</a></header>
+<main>
+    <p id="access" role="status">Checking admin access…</p>
+    <div id="workspace" hidden>
+        <section>
+            <h2>Export a time range</h2>
+            <p>Select main articles by publication date, inclusive, in Europe/Oslo time. Each selected incident includes all its follow-ups, comments, cached text, and uploaded PDFs, even if a follow-up falls outside the date range.</p>
+            <form id="exportForm">
+                <div class="fields">
+                    <label>From <input id="startDate" type="date" required></label>
+                    <label>Through <input id="endDate" type="date" required></label>
+                </div>
+                <button id="exportButton">Download ZIP archive</button>
+            </form>
+            <p id="exportStatus" role="status" aria-live="polite"></p>
+        </section>
+        <section>
+            <h2>Import an archive</h2>
+            <p>Upload the exported ZIP on the destination installation. Records are added with new local IDs. Reimporting from the same source adds new records and keeps previously imported records and local edits. Existing destination data is preserved.</p>
+            <p>Authors are preserved as separate contributor accounts with no source passwords, email addresses, or admin roles. Sign in using the destination’s own admin account.</p>
+            <form id="importForm">
+                <div class="fields"><label>GeoNews archive (maximum 128 MB) <input id="archive" type="file" accept=".zip,application/zip" required></label></div>
+                <button id="importButton">Import archive</button>
+            </form>
+            <p id="importStatus" role="status" aria-live="polite"></p>
+        </section>
+        <p>Cached text and uploaded PDFs are included for offline reading. Remote thumbnails, map tiles, and CDN-hosted map libraries are not included in the archive. A fully offline map needs local libraries and tile services.</p>
+    </div>
+</main>
+<script>
+    const $ = id => document.getElementById(id);
+    let token, maxBytes;
+    function busy(value) { $('exportButton').disabled = value; $('importButton').disabled = value; }
+    function status(id, message, error = false) {
+        $(id).textContent = message;
+        $(id).className = error ? 'error' : 'success';
+    }
+    async function checkResponse(response) {
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.error || `Transfer failed (HTTP ${response.status}). Check server upload limits.`);
+        }
+        return response;
+    }
+    $('exportForm').onsubmit = async event => {
+        event.preventDefault();
+        if ($('startDate').value > $('endDate').value) { status('exportStatus', 'Start date must be before or equal to end date.', true); return; }
+        busy(true); status('exportStatus', 'Building archive…');
+        try {
+            const query = new URLSearchParams({action: 'export', start_date: $('startDate').value, end_date: $('endDate').value});
+            const response = await checkResponse(await fetch('api/data-transfer.php?' + query));
+            const url = URL.createObjectURL(await response.blob());
+            const link = document.createElement('a'); link.href = url;
+            link.download = `geonews-${$('startDate').value}-to-${$('endDate').value}.zip`;
+            document.body.append(link); link.click(); link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
+            status('exportStatus', 'Archive downloaded. Transfer it to your destination installation.');
+        } catch (error) { status('exportStatus', error.message, true); }
+        finally { busy(false); }
+    };
+    $('importForm').onsubmit = async event => {
+        event.preventDefault();
+        const file = $('archive').files[0];
+        if (!file) return;
+        if (file.size > maxBytes) { status('importStatus', 'Archive exceeds 128 MB. Export smaller date ranges.', true); return; }
+        const body = new FormData(); body.append('archive', file);
+        busy(true); status('importStatus', 'Uploading and importing…');
+        try {
+            const response = await checkResponse(await fetch('api/data-transfer.php?action=import', {method: 'POST', headers: {'X-Transfer-Token': token}, body}));
+            const {counts: c} = await response.json();
+            status('importStatus', `Imported ${c.articles} articles, ${c.updates} follow-ups, ${c.comments} comments, ${c.snapshots} snapshots, and ${c.pdfs} PDFs. ${c.skipped} previously imported records kept. Open the map to browse them.`);
+        } catch (error) { status('importStatus', error.message, true); }
+        finally { busy(false); }
+    };
+    (async () => {
+        try {
+            const response = await checkResponse(await fetch('api/data-transfer.php'));
+            const data = await response.json(); token = data.token; maxBytes = data.max_archive_bytes;
+            $('startDate').value = data.range.start_date || new Date().toISOString().slice(0, 10);
+            $('endDate').value = data.range.end_date || $('startDate').value;
+            $('access').textContent = 'Admin access confirmed'; $('workspace').hidden = false;
+        } catch (error) { status('access', error.message, true); }
+    })();
+</script>
+</body>
+</html>

@@ -50,6 +50,68 @@ For a standalone Docker deployment, mount a named volume with `-v geonews_pdf:/p
 For a host directory, mount it at `/pdf` and make it writable by `www-data`
 (UID 33). PDF files are retained when articles are deleted.
 
+### Cached articles
+
+The popup's **Cached article** link opens a local, text-only page containing the
+main article and all its follow-up articles in publication order. Each new entry
+captures the publicly accessible article text when it is saved. The saved title,
+URL, summary, publication date, and text are preserved through subsequent edits
+and metadata refreshes. Deleting an entry also deletes its snapshot.
+
+**Existing installations:** apply `docker/article-cache.sql` to your database
+once before deploying this feature. For a Compose installation:
+
+```sh
+docker compose exec -T db sh -c 'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"' < docker/article-cache.sql
+```
+
+New databases include the table in `docker/schema.sql`. Older entries have no
+historical snapshot and are labeled accordingly; they are not fetched on page
+views. Failed captures do not prevent saving an article. Captures can be partial,
+and sites requiring JavaScript or a subscription may not provide readable text.
+Uploaded PDFs link to the stored PDF instead of extracting its text.
+
+### Export / Import
+
+Sign in as an **admin**, then open **Export / Import** in the map header (or
+`data-transfer.html`). Select an inclusive publication date range and download
+the ZIP. On the destination installation, sign in as its admin and upload the
+archive on the same page. No connection to the source server is needed to import.
+
+The date range selects **main articles** in Europe/Oslo time. Every selected
+incident includes all its follow-ups and comments, including those outside that
+range, plus original cached text snapshots and uploaded PDFs. Remote thumbnails
+are kept as URLs, not downloaded. Source passwords, emails, and roles are excluded;
+authors become separate contributor accounts with random, unknown passwords and
+no administrative privileges. Username collisions receive a source suffix.
+
+Imports merge rather than replace the destination database. Source IDs are
+mapped to new local IDs. Repeated or overlapping imports from the same source
+skip previously imported records, preserving local edits, while adding new
+articles, follow-ups, comments and missing snapshots. This is an additive transfer,
+not synchronization of edits or deletions. Export/import history is stored in
+`data_transfer_origin` and `data_transfer_records`; retain these tables with your
+database. Importing an installation's own archive back into itself is rejected.
+
+**Existing installations:** apply `docker/data-transfer.sql` on both source and
+destination databases. Also apply `docker/article-cache.sql` if not already done.
+New databases include all tables in `docker/schema.sql`.
+
+PHP needs the **zip** extension (`ZipArchive`), writable temporary storage, and
+writable `pdf/` storage. Docker installs and configures these automatically.
+For non-Docker installations, enable PHP zip and set `upload_max_filesize=128M`,
+`post_max_size=129M`, and `memory_limit=512M` (also adjust proxy upload limits).
+PDF uploads themselves retain their 20 MB limit. Each transfer supports up to
+128 MB compressed, 256 MB expanded, and 64 MB of JSON; use smaller date ranges
+for larger datasets. Missing referenced PDFs cause export to fail rather than
+silently omitting offline content. Failed imports roll back database changes and
+remove newly written PDFs.
+
+Cached-article pages and included PDFs work without contacting publishers.
+A completely offline **map** additionally needs local copies of the application's
+CDN-hosted JavaScript/CSS libraries and locally available map tiles. Those assets
+and map-service settings are not part of the data archive.
+
 ### Map services
 
 Example `.env` overrides:

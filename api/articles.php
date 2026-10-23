@@ -39,6 +39,7 @@ session_start();
 // ------------------------------------------------------------------
 // Ensure db.php is sanitized (from Step 1)
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/article-cache.php';
 
 // ------------------------------------------------------------------
 // 5. SETUP & MASTER CONFIG
@@ -214,9 +215,14 @@ if ($method === 'POST') {
         $source    = trim($input['source_name'] ?? '');
         $pubDate   = !empty($input['published_at']) ? $input['published_at'] : date('Y-m-d H:i:s');
         if ($articleId <= 0 || empty($title) || !$url) { http_response_code(400); echo json_encode(['error' => 'Invalid update payload']); exit; }
+        $snapshot = captureArticleSnapshot($url);
+        $pdo->beginTransaction();
         $stmt = $pdo->prepare("INSERT INTO article_updates (article_id, user_id, title, url, source_name, published_at) VALUES (:article_id, :user_id, :title, :url, :source_name, :published_at)");
         $success = $stmt->execute(['article_id' => $articleId, 'user_id' => $currentUserId, 'title' => $title, 'url' => $url, 'source_name' => $source, 'published_at' => $pubDate]);
-        if ($success) { echo json_encode(['message' => 'Timeline update added successfully', 'id' => $pdo->lastInsertId()]); } 
+        $updateId = $pdo->lastInsertId();
+        saveArticleSnapshot($pdo, 'update', $updateId, $title, $url, '', $pubDate, $snapshot);
+        $pdo->commit();
+        if ($success) { echo json_encode(['message' => 'Timeline update added successfully', 'id' => $updateId]); }
         else { http_response_code(500); echo json_encode(['error' => 'Failed to add timeline update']); }
         exit;
     }
@@ -264,9 +270,14 @@ if ($method === 'POST') {
     } 
 
     // INSERT
+    $snapshot = captureArticleSnapshot($url);
+    $pdo->beginTransaction();
     $stmt = $pdo->prepare("INSERT INTO articles (user_id, title, summary, url, image_url, emoji, category_slug, latitude, longitude, injured_count, killed_count, published_at) VALUES (:user_id, :title, :summary, :url, :image_url, :emoji, :category_slug, :latitude, :longitude, :injured_count, :killed_count, :published_at)");
     $success = $stmt->execute(['user_id' => $currentUserId, 'title' => $title, 'summary' => $summary, 'url' => $url, 'image_url' => $imageUrl, 'emoji' => $emoji, 'category_slug' => $categorySlug, 'latitude' => $latitude, 'longitude' => $longitude, 'injured_count' => $injuredCount, 'killed_count' => $killedCount, 'published_at' => $publishedAt]);
-    if ($success) { http_response_code(201); echo json_encode(['message' => 'Article created successfully', 'id' => $pdo->lastInsertId()]); } 
+    $newArticleId = $pdo->lastInsertId();
+    saveArticleSnapshot($pdo, 'article', $newArticleId, $title, $url, $summary, $publishedAt, $snapshot);
+    $pdo->commit();
+    if ($success) { http_response_code(201); echo json_encode(['message' => 'Article created successfully', 'id' => $newArticleId]); }
     else { http_response_code(500); echo json_encode(['error' => 'Failed to save article']); }
     exit;
 }

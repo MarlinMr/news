@@ -6,12 +6,28 @@ SET CHARACTER SET utf8mb4;
 -- USE `geonews`;
 
 -- Drop existing tables if re-initializing
+DROP TABLE IF EXISTS data_transfer_records;
+DROP TABLE IF EXISTS data_transfer_origin;
+DROP TABLE IF EXISTS `article_snapshots`;
 DROP TABLE IF EXISTS `article_updates`;
 DROP TABLE IF EXISTS `article_comments`;
 DROP TABLE IF EXISTS `articles`;
 DROP TABLE IF EXISTS `users`;
 
 -- 1. Users Table
+CREATE TABLE data_transfer_origin (
+    id INT PRIMARY KEY,
+    origin CHAR(32) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE data_transfer_records (
+    origin CHAR(32) NOT NULL,
+    record_type VARCHAR(16) NOT NULL,
+    source_id INT NOT NULL,
+    local_id INT NOT NULL,
+    PRIMARY KEY (origin, record_type, source_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE `users` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `username` VARCHAR(50) NOT NULL UNIQUE,
@@ -50,6 +66,20 @@ CREATE TABLE `article_updates` (
     `published_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (`article_id`) REFERENCES `articles`(`id`) ON DELETE CASCADE,
     FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE article_snapshots (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    article_id INT NULL UNIQUE,
+    update_id INT NULL UNIQUE,
+    title VARCHAR(255) NOT NULL,
+    url VARCHAR(500) NOT NULL,
+    summary TEXT NOT NULL,
+    published_at DATETIME NOT NULL,
+    article_text MEDIUMTEXT NOT NULL,
+    captured_at DATETIME NOT NULL,
+    FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE,
+    FOREIGN KEY (update_id) REFERENCES article_updates(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Seed Sample Users (password is 'password123' for all, using PHP native $2y$ BCRYPT prefix)

@@ -4,12 +4,13 @@ FROM php:8.2-apache
 RUN apt-get update && apt-get install -y \
     libxml2-dev \
     libonig-dev \
-    && docker-php-ext-install pdo pdo_mysql mbstring dom \
+    libzip-dev \
+    && docker-php-ext-install pdo pdo_mysql mbstring dom zip \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Set PHP timezone to Europe/Oslo (handles DST)
 RUN echo "date.timezone = Europe/Oslo" > /usr/local/etc/php/conf.d/timezone.ini
-RUN echo "upload_max_filesize = 20M\npost_max_size = 21M" > /usr/local/etc/php/conf.d/uploads.ini
+RUN echo "upload_max_filesize = 128M\npost_max_size = 129M\nmemory_limit = 512M" > /usr/local/etc/php/conf.d/uploads.ini
 
 # Enable Apache rewrite module
 RUN a2enmod rewrite headers

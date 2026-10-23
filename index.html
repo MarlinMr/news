@@ -1235,7 +1235,7 @@
                     currentUser = data.user;
                     authBar.innerHTML = `
                         <div class="user-badge">👤 <strong>${currentUser.username}</strong></div>
-                        ${currentUser.role === 'admin' ? '<a href="bulk-update.html">Bulk update</a>' : ''}
+                        ${currentUser.role === 'admin' ? '<a href="bulk-update.html">Bulk update</a><a href="data-transfer.html">Export / Import</a>' : ''}
                         <button class="btn-logout" onclick="logout()">Logout</button>
                     `;
                 } else {
@@ -1513,8 +1513,8 @@
                         row.className = 'diff-row';
                         row.innerHTML = `
                             <div class="diff-field-label">${label}</div>
-                            <div class="diff-old">- Stored: ${oldVal || '<i>(empty)</i>'}</div>
-                            <div class="diff-new">+ Scraped: ${newVal || '<i>(empty)</i>'}</div>
+                            <div class="diff-old">- Stored: ${oldVal ? escapeComment(oldVal) : '<i>(empty)</i>'}</div>
+                            <div class="diff-new">+ Scraped: ${newVal ? escapeComment(newVal) : '<i>(empty)</i>'}</div>
                             <button type="button" class="btn-rollback" onclick="rollbackField('${fieldId}', this)">↺ Keep Old</button>
                         `;
                         row.querySelector('.btn-rollback').dataset.oldValue = oldVal;
@@ -1754,7 +1754,7 @@
 
                     const customIcon = L.divIcon({
                         className: 'emoji-marker',
-                        html: `<div>${item.emoji}</div>`,
+                        html: `<div>${escapeComment(item.emoji)}</div>`,
                         iconSize: [30, 30],
                         iconAnchor: [15, 15]
                     });
@@ -1804,8 +1804,9 @@
                             const canDelUpd = currentUser && (currentUser.id == upd.user_id || ['admin', 'moderator'].includes(currentUser.role));
                             updatesHtml += `
                                 <li class="timeline-item">
-                                    <div class="timeline-item-date">${updDate} ${upd.source_name ? '• ' + upd.source_name : ''}</div>
-                                    <a href="${upd.url}" target="_blank" rel="noopener">${upd.title}</a>
+                                    <div class="timeline-item-date">${updDate} ${upd.source_name ? '• ' + escapeComment(upd.source_name) : ''}</div>
+                                    <a href="${escapeComment(upd.url)}" target="_blank" rel="noopener">${escapeComment(upd.title)}</a>
+                                    <a href="cached-article.php?id=${item.id}#update-${upd.id}" target="_blank" rel="noopener">Cached article</a>
                                     ${canDelUpd ? `<button style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:10px;margin-left:4px;" onclick="deleteTimelineUpdate(${upd.id})">✖</button>` : ''}
                                 </li>
                             `;
@@ -1817,13 +1818,14 @@
                         <div class="article-card">
                             <div class="meta">
                                 <span>${pubDate.toLocaleDateString(undefined, { timeZone: APP_TIMEZONE })}</span>
-                                <span>by ${item.author || 'User'}</span>
+                                <span>by ${escapeComment(item.author || 'User')}</span>
                             </div>
-                            <h4>${item.emoji} ${item.title}</h4>
+                            <h4>${escapeComment(item.emoji)} ${escapeComment(item.title)}</h4>
                             ${casualtyHtml}
-                            ${item.image_url ? `<img src="${item.image_url}" alt="Article thumbnail">` : ''}
-                            <p>${item.summary || ''}</p>
-                            <a href="${item.url}" target="_blank" rel="noopener">Read Main Article &rarr;</a>
+                            ${item.image_url ? `<img src="${escapeComment(item.image_url)}" alt="Article thumbnail">` : ''}
+                            <p>${escapeComment(item.summary)}</p>
+                            <a href="${escapeComment(item.url)}" target="_blank" rel="noopener">Read Main Article &rarr;</a>
+                            <a href="cached-article.php?id=${item.id}" target="_blank" rel="noopener" style="margin-left:12px;">Cached article</a>
                             
                             ${updatesHtml}
 
@@ -1847,10 +1849,10 @@
                     feedCard.onclick = () => focusIncident(item.id);
                     feedCard.innerHTML = `
                         <div class="feed-item-header">
-                            <span>${item.emoji} ${pubDate.toLocaleDateString(undefined, { timeZone: APP_TIMEZONE })}</span>
-                            <span>by ${item.author || 'User'}</span>
+                            <span>${escapeComment(item.emoji)} ${pubDate.toLocaleDateString(undefined, { timeZone: APP_TIMEZONE })}</span>
+                            <span>by ${escapeComment(item.author || 'User')}</span>
                         </div>
-                        <div class="feed-item-title">${item.title}</div>
+                        <div class="feed-item-title">${escapeComment(item.title)}</div>
                         ${(injuredNum > 0 || killedNum > 0) ? `
                             <div style="font-size: 10px; margin-top: 4px; color: #f59e0b; display: flex; gap: 6px;">
                                 ${injuredNum > 0 ? '<span style="color:#d97706">🩹 ' + injuredNum + ' Injured</span>' : ''}
@@ -2196,9 +2198,9 @@
 
                 if (ev.type === 'incident') {
                     dot.innerHTML = `
-                        <div class="timeline-dot-incident" title="${ev.title}">${ev.emoji}</div>
+                        <div class="timeline-dot-incident" title="${escapeComment(ev.title)}">${escapeComment(ev.emoji)}</div>
                         <div class="timeline-tooltip">
-                            <strong>${ev.emoji} ${ev.title}</strong>
+                            <strong>${escapeComment(ev.emoji)} ${escapeComment(ev.title)}</strong>
                             <div style="color: #94a3b8; font-size: 10px; margin-top: 2px;">${dateFormatted} at ${timeFormatted}</div>
                             ${(ev.injured > 0 || ev.killed > 0) ? `
                                 <div style="margin-top: 3px; font-size: 10px;">
@@ -2211,11 +2213,11 @@
                     `;
                 } else {
                     dot.innerHTML = `
-                        <div class="timeline-dot-update" title="Update: ${ev.title}">•</div>
+                        <div class="timeline-dot-update" title="Update: ${escapeComment(ev.title)}">•</div>
                         <div class="timeline-tooltip">
-                            <strong>🔄 Update: ${ev.title}</strong>
-                            <div style="color: #cbd5e1; font-size: 10px; margin-top: 2px;">For: ${ev.parentEmoji} ${ev.parentTitle}</div>
-                            <div style="color: #94a3b8; font-size: 10px; margin-top: 2px;">${dateFormatted} at ${timeFormatted} ${ev.source ? '• ' + ev.source : ''}</div>
+                            <strong>🔄 Update: ${escapeComment(ev.title)}</strong>
+                            <div style="color: #cbd5e1; font-size: 10px; margin-top: 2px;">For: ${escapeComment(ev.parentEmoji)} ${escapeComment(ev.parentTitle)}</div>
+                            <div style="color: #94a3b8; font-size: 10px; margin-top: 2px;">${dateFormatted} at ${timeFormatted} ${ev.source ? '• ' + escapeComment(ev.source) : ''}</div>
                             <div style="color: #38bdf8; font-size: 9px; margin-top: 3px;">📍 Click to jump to incident pin</div>
                         </div>
                     `;
@@ -2303,7 +2305,7 @@
                 const dateStr = parsePublishDate(item.published_at).toLocaleDateString(undefined, { timeZone: APP_TIMEZONE });
                 return `
                     <div class="incident-search-result-item" onclick="focusIncident(${item.id}); hideIncidentSearchResults();" tabindex="0" role="button" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();focusIncident(${item.id});hideIncidentSearchResults();}">
-                        <div class="incident-search-result-title">${item.emoji} ${item.title}</div>
+                        <div class="incident-search-result-title">${escapeComment(item.emoji)} ${escapeComment(item.title)}</div>
                         <div class="incident-search-result-meta">
                             <span>${dateStr}</span>
                             <span class="incident-search-result-category">${catInfo.emoji} ${catInfo.name}</span>
