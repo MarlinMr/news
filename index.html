@@ -28,18 +28,25 @@
             align-items: center;
             justify-content: space-between;
             gap: 12px;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
             z-index: 1000;
             box-shadow: 0 2px 8px rgba(0,0,0,0.3);
             min-height: 64px;
         }
 
         .header-brand { display: flex; align-items: center; gap: 6px; font-weight: bold; font-size: 18px; flex-shrink: 0; }
-        .header-top-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .header-top-row { position: relative; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
         .brand-stack { display: flex; flex-direction: column; gap: 2px; }
         .built-date { font-size: 10px; font-weight: normal; color: #94a3b8; }
         .header-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
         .header-links a, .auth-bar a { color: #93c5fd; font-size: 12px; white-space: nowrap; }
+        .header-menu > summary { cursor: pointer; padding: 6px 10px; border: 1px solid #475569; border-radius: 4px; font-size: 13px; white-space: nowrap; }
+        .header-menu > summary:hover, .header-menu[open] > summary { background: #334155; }
+        .header-menu-panel { position: absolute; top: calc(100% + 12px); left: 0; width: 330px; max-width: calc(100vw - 24px); padding: 16px; display: flex; flex-direction: column; gap: 16px; background: #1e293b; border: 1px solid #475569; border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.4); z-index: 1100; }
+        .header-menu-panel .auth-bar { align-items: stretch; flex-direction: column; gap: 12px; }
+        .header-menu-panel .user-badge { overflow-wrap: anywhere; }
+        .header-menu-panel .controls-group { flex-direction: column; gap: 12px; }
+        .header-menu-panel .category-select { width: 100%; }
         .controls-group { display: flex; gap: 8px; flex-shrink: 0; }
         .map-style-control { display: flex; flex-direction: column; justify-content: center; gap: 4px; }
         .map-style-control label { font-size: 11px; color: #94a3b8; }
@@ -96,7 +103,13 @@
         .incident-search-empty { padding: 16px; text-align: center; color: #64748b; font-size: 12px; }
 
         @media (min-width: 851px) {
-            .search-box { width: 280px; }
+            .search-box { flex-direction: row; align-items: center; width: 280px; min-width: 150px; flex: 1; max-width: 280px; }
+            .search-tabs { flex-shrink: 0; }
+            .search-box .search-tab { padding: 4px 6px; font-size: 12px; }
+            .search-tab-label { display: none; }
+            .search-panels { flex: 1; min-width: 0; }
+            header .timeline-container { flex-wrap: nowrap; }
+            .timeline-container .category-select { width: clamp(140px, 14vw, 220px); min-width: 0; }
         }
 
         .timeline-container { 
@@ -144,7 +157,7 @@
             width: 105px;
         }
 
-        .auth-bar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
+        .auth-bar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-shrink: 0; }
         .auth-bar button { padding: 6px 12px; border-radius: 4px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
         .btn-login { background: #3b82f6; color: white; }
         .btn-logout { background: #ef4444; color: white; }
@@ -306,6 +319,19 @@
         .btn-submit { background: #16a34a; color: white; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-weight: 600; }
 
         .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
+        @media (min-width: 851px) and (max-width: 1100px) {
+            header { padding: 10px 12px; gap: 8px; }
+            .header-top-row { gap: 8px; }
+            .header-brand { font-size: 16px; }
+            .search-box { min-width: 160px; }
+            .search-panel button { padding: 6px; font-size: 11px; }
+            .timeline-container { gap: 4px; padding: 6px; }
+            .timeline-container .category-select { width: 100px; }
+            .preset-group { gap: 2px; }
+            .btn-preset { padding: 4px; }
+            .date-pickers input[type="date"] { width: 88px; }
+        }
 
         @media (max-width: 850px) {
             header { flex-direction: column; align-items: stretch; height: auto; padding: 10px 12px; gap: 8px; }
@@ -603,34 +629,39 @@
                 <div class="header-brand">📰 GeoNews</div>
                 <span class="built-date" id="builtDate" hidden></span>
             </div>
-            <nav class="header-links" aria-label="Help"><a href="docs/">Docs / How-to</a></nav>
-            <div class="auth-bar" id="authBar"></div>
+            <details class="header-menu" id="headerMenu">
+                <summary>Menu</summary>
+                <div class="header-menu-panel">
+                    <nav class="header-links" aria-label="Help"><a href="docs/">Docs / How-to</a></nav>
+                    <div class="auth-bar" id="authBar"></div>
+                    <div class="controls-group">
+                        <div class="map-style-control">
+                            <label for="mapStyle">Map style</label>
+                            <select id="mapStyle" class="category-select" onchange="changeMapStyle(this.value)">
+                                <option value="osm">OpenStreetMap</option>
+                                <option value="topo">Fargekart</option>
+                                <option value="graatone">Gråtonekart</option>
+                                <option value="toporaster">Turkart</option>
+                                <option value="sjokart">Sjøkart</option>
+                                <option value="opentopomap">OpenTopoMap</option>
+                            </select>
+                        </div>
+                        <div class="overlay-control">
+                            <label for="overlaySelect">Overlay map</label>
+                            <select id="overlaySelect" class="category-select" onchange="toggleOverlayMap(this.value)">
+                                <option value="">None</option>
+                                <option value="openrailwaymap">OpenRailwayMap</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </details>
         </div>
 
-<div class="controls-group">
-            <div class="map-style-control">
-                <label for="mapStyle">Map style</label>
-                <select id="mapStyle" class="category-select" onchange="changeMapStyle(this.value)">
-                    <option value="osm">OpenStreetMap</option>
-                    <option value="topo">Fargekart</option>
-                    <option value="graatone">Gråtonekart</option>
-                    <option value="toporaster">Turkart</option>
-                    <option value="sjokart">Sjøkart</option>
-                    <option value="opentopomap">OpenTopoMap</option>
-                </select>
-            </div>
-            <div class="overlay-control">
-                <label for="overlaySelect">Overlay map</label>
-                <select id="overlaySelect" class="category-select" onchange="toggleOverlayMap(this.value)">
-                    <option value="">None</option>
-                    <option value="openrailwaymap">OpenRailwayMap</option>
-                </select>
-            </div>
-        </div>
-            
+        <div class="search-box">
                 <div class="search-tabs" role="tablist" aria-label="Search mode">
-                    <button type="button" class="search-tab active" role="tab" aria-selected="true" aria-controls="location-search-panel" id="tab-location" onclick="switchSearchTab('location')">📍 Location</button>
-                    <button type="button" class="search-tab" role="tab" aria-selected="false" aria-controls="incident-search-panel" id="tab-incident" onclick="switchSearchTab('incident')">📰 Incidents</button>
+                    <button type="button" class="search-tab active" role="tab" aria-label="Search locations" title="Search locations" aria-selected="true" aria-controls="location-search-panel" id="tab-location" onclick="switchSearchTab('location')">📍<span class="search-tab-label"> Location</span></button>
+                    <button type="button" class="search-tab" role="tab" aria-label="Search incidents" title="Search incidents" aria-selected="false" aria-controls="incident-search-panel" id="tab-incident" onclick="switchSearchTab('incident')">📰<span class="search-tab-label"> Incidents</span></button>
                 </div>
                 <div class="search-panels">
                     <form class="search-panel active" id="location-search-panel" role="tabpanel" aria-labelledby="tab-location" onsubmit="event.preventDefault(); searchLocation();">
@@ -646,7 +677,6 @@
                     </div>
                 </div>
             </div>
-        </div>
 
         <div class="timeline-container">
             <label for="categoryFilter" class="sr-only">Filter by Category</label>
@@ -690,8 +720,8 @@
             </select>
 
             <div class="preset-group">
-                <button type="button" class="btn-preset" onclick="applyPreset(7, event)">7D</button>
-                <button type="button" class="btn-preset active" onclick="applyPreset(30, event)">1M</button>
+                <button type="button" class="btn-preset active" onclick="applyPreset(7, event)">7D</button>
+                <button type="button" class="btn-preset" onclick="applyPreset(30, event)">1M</button>
                 <button type="button" class="btn-preset" onclick="applyPreset(180, event)">6M</button>
                 <button type="button" class="btn-preset" onclick="applyPreset(365, event)">1Y</button>
                 <button type="button" class="btn-preset" onclick="applyPreset(365, event)">ALL</button>
@@ -1198,9 +1228,21 @@
 
         function initDateRange() {
             const today = osloParts().date;
-            document.getElementById('startDate').value = shiftCalendarDate(today, -30);
+            document.getElementById('startDate').value = shiftCalendarDate(today, -7);
             document.getElementById('endDate').value = today;
         }
+
+        document.addEventListener('click', event => {
+            const menu = document.getElementById('headerMenu');
+            if (!menu.contains(event.target)) menu.open = false;
+        });
+        document.addEventListener('keydown', event => {
+            const menu = document.getElementById('headerMenu');
+            if (event.key === 'Escape' && menu.open) {
+                menu.open = false;
+                menu.querySelector('summary').focus();
+            }
+        });
 
         function applyPreset(daysAgo, event) {
             const today = osloParts().date;
@@ -1234,7 +1276,7 @@
                 if (data.authenticated) {
                     currentUser = data.user;
                     authBar.innerHTML = `
-                        <div class="user-badge">👤 <strong>${currentUser.username}</strong></div>
+                        <div class="user-badge">👤 <strong>${escapeComment(currentUser.username)}</strong></div>
                         ${currentUser.role === 'admin' ? '<a href="bulk-update.html">Bulk update</a><a href="data-transfer.html">Export / Import</a>' : ''}
                         <button class="btn-logout" onclick="logout()">Logout</button>
                     `;
