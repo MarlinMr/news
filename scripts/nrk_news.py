@@ -165,7 +165,7 @@ class Publisher:
         if not stories:
             return set()
         dates = [story["published_at"][:10] for story in stories]
-        query = urllib.parse.urlencode({"start_date": min(dates), "end_date": max(dates), "location": "all"})
+        query = urllib.parse.urlencode({"action": "existing_urls", "start_date": min(dates), "end_date": max(dates), "location": "all"})
         articles = self.api("articles.php?" + query)
         return {story_key(article["url"]) for article in articles}
 

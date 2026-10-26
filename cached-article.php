@@ -5,6 +5,7 @@ header('Cache-Control: no-store');
 header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'");
 header('X-Content-Type-Options: nosniff');
 require_once __DIR__ . '/api/db.php';
+require_once __DIR__ . '/api/article-conversion.php';
 
 function cacheEscape($value) {
     return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
@@ -76,11 +77,20 @@ foreach (is_array($_GET['versions'] ?? null) ? $_GET['versions'] : [] as $target
 $article = false;
 $updates = [];
 if ($id && $id > 0) {
-    $stmt = $pdo->prepare('SELECT id, title, url, summary, published_at FROM articles WHERE id = ?');
+    $destination = articleDestination($pdo, $id);
+    if ($destination && $destination['update_id']) {
+        if (isset($cacheSelections['article'])) {
+            $cacheSelections['update-' . $destination['update_id']] = $cacheSelections['article'];
+            unset($cacheSelections['article']);
+        }
+        header('Location: cached-article.php?' . http_build_query(['id' => $destination['article_id'], 'versions' => $cacheSelections], '', '&', PHP_QUERY_RFC3986) . '#update-' . $destination['update_id'], true, 302);
+        exit;
+    }
+    $stmt = $pdo->prepare('SELECT id, title, url, summary, published_at FROM articles WHERE id = ? AND converted_update_id IS NULL');
     $stmt->execute([$id]);
     $article = $stmt->fetch();
     if ($article) {
-        $stmt = $pdo->prepare("SELECT id, source_name, title, url, '' AS summary, published_at FROM article_updates WHERE article_id = ? ORDER BY published_at ASC, id ASC");
+        $stmt = $pdo->prepare("SELECT id, source_name, title, url, COALESCE((SELECT original.summary FROM articles original WHERE original.converted_update_id = article_updates.id ORDER BY original.id LIMIT 1), '') AS summary, published_at FROM article_updates WHERE article_id = ? ORDER BY published_at ASC, id ASC");
         $stmt->execute([$id]);
         $updates = $stmt->fetchAll();
         $stmt = $pdo->prepare('SELECT s.id, s.article_id, s.update_id, s.version_key, s.title, s.url, s.summary, s.published_at, s.captured_at, LENGTH(s.article_text) > 0 AS has_text FROM article_snapshots s LEFT JOIN article_updates au ON au.id = s.update_id WHERE s.article_id = ? OR au.article_id = ? ORDER BY s.captured_at DESC, s.id DESC');

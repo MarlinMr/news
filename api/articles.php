@@ -40,6 +40,7 @@ session_start();
 // Ensure db.php is sanitized (from Step 1)
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/article-cache.php';
+require_once __DIR__ . '/article-conversion.php';
 
 // ------------------------------------------------------------------
 // 5. SETUP & MASTER CONFIG
@@ -98,6 +99,27 @@ $categoryEmojiMap = [
 // 6. GET: FETCH ARTICLES (WITH TIMELINE UPDATES)
 // ------------------------------------------------------------------
 if ($method === 'GET') {
+    if (($_GET['action'] ?? '') === 'existing_urls') {
+        $start = ($_GET['start_date'] ?? '1000-01-01') . ' 00:00:00';
+        $end = ($_GET['end_date'] ?? '9999-12-31') . ' 23:59:59';
+        $stmt = $pdo->prepare('SELECT url FROM articles WHERE published_at BETWEEN ? AND ? UNION SELECT url FROM article_updates WHERE published_at BETWEEN ? AND ?');
+        $stmt->execute([$start, $end, $start, $end]);
+        echo json_encode($stmt->fetchAll()); exit;
+    }
+    if (($_GET['action'] ?? '') === 'resolve') {
+        $destination = articleDestination($pdo, (int)($_GET['id'] ?? 0));
+        if (!$destination) { http_response_code(404); echo json_encode(['error' => 'Article not found']); exit; }
+        $stmt = $pdo->prepare('SELECT published_at FROM articles WHERE id = ?');
+        $stmt->execute([$destination['article_id']]);
+        $destination['published_at'] = $stmt->fetchColumn();
+        echo json_encode($destination); exit;
+    }
+    if (($_GET['action'] ?? '') === 'select_existing') {
+        $query = trim((string)($_GET['q'] ?? ''));
+        $stmt = $pdo->prepare('SELECT a.id, a.user_id, a.title, a.url, a.latitude, a.longitude, a.published_at, u.username AS author FROM articles a LEFT JOIN users u ON u.id = a.user_id WHERE a.converted_update_id IS NULL AND a.id <> ? AND (a.title LIKE ? OR a.url LIKE ?) ORDER BY a.published_at DESC, a.id DESC LIMIT 100');
+        $stmt->execute([(int)($_GET['exclude'] ?? 0), '%' . $query . '%', '%' . $query . '%']);
+        echo json_encode($stmt->fetchAll(), JSON_UNESCAPED_UNICODE); exit;
+    }
     if (($_GET['action'] ?? '') === 'cache_candidates') {
         if (!isset($_SESSION['user_id'])) { http_response_code(401); echo json_encode(['error' => 'Please sign in first']); exit; }
         $hours = filter_var($_GET['hours'] ?? 72, FILTER_VALIDATE_INT);
@@ -112,7 +134,7 @@ if ($method === 'GET') {
         if (!$canCheckAll) $params[] = $_SESSION['user_id'];
         $where = "published_at >= ? AND published_at <= ? AND (cache_checked_at IS NULL OR cache_checked_at <= ?) AND url REGEXP '^https?://' $ownerFilter";
         $stmt = $pdo->prepare("SELECT * FROM (
-            SELECT id, 'article' AS type, title, published_at, cache_checked_at FROM articles WHERE $where
+            SELECT id, 'article' AS type, title, published_at, cache_checked_at FROM articles WHERE converted_update_id IS NULL AND $where
             UNION ALL
             SELECT id, 'update' AS type, title, published_at, cache_checked_at FROM article_updates WHERE $where
         ) candidates ORDER BY cache_checked_at ASC, published_at DESC, type, id LIMIT $limit");
@@ -136,6 +158,7 @@ if ($method === 'GET') {
         FROM articles a
         LEFT JOIN users u ON a.user_id = u.id
         WHERE a.published_at >= :start_date AND a.published_at <= :end_date
+        AND a.converted_update_id IS NULL
         $locationFilter
         ORDER BY a.published_at DESC
     ");
@@ -189,6 +212,29 @@ if ($method === 'POST') {
         http_response_code(400); echo json_encode(['error' => 'Invalid JSON payload']); exit;
     }
 
+    if (($input['action'] ?? '') === 'convert_to_update') {
+        try {
+            $pdo->beginTransaction();
+            $parentId = (int)($input['article_id'] ?? 0);
+            $updateId = convertArticleToUpdate($pdo, (int)($input['id'] ?? 0), $parentId, $currentUserId, $currentUserRole);
+            $pdo->commit();
+            echo json_encode(['message' => 'Article moved to event timeline', 'article_id' => $parentId, 'update_id' => $updateId]);
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            http_response_code($e instanceof DomainException ? 403 : ($e instanceof OutOfBoundsException ? 404 : ($e instanceof InvalidArgumentException ? 409 : 500)));
+            echo json_encode(['error' => $e instanceof LogicException ? $e->getMessage() : 'Could not move article. Reload and try again.']);
+        }
+        exit;
+    }
+
+    // Reject stale writes to hidden identities, including add_update/comment and placement.
+    $writeId = (int)($input['article_id'] ?? $input['id'] ?? 0);
+    if ($writeId > 0 && !in_array($input['action'] ?? '', ['edit_comment'], true) && !(($input['action'] ?? '') === 'refresh_cache' && ($input['type'] ?? '') === 'update')) {
+        $stmt = $pdo->prepare('SELECT converted_update_id FROM articles WHERE id = ?');
+        $stmt->execute([$writeId]); $row = $stmt->fetch();
+        if ($row && $row['converted_update_id'] !== null) { http_response_code(409); echo json_encode(['error' => 'This article is now an update. Reload its parent incident.']); exit; }
+    }
+
     if (($input['action'] ?? '') === 'refresh_cache') {
         $type = $input['type'] ?? 'article';
         $id = (int)($input['id'] ?? 0);
@@ -216,7 +262,7 @@ if ($method === 'POST') {
         }
         // Any signed-in user can place an unlocated story. The conditional UPDATE
         // prevents another user's concurrent placement from being overwritten.
-        $stmt = $pdo->prepare('UPDATE articles SET latitude = ?, longitude = ? WHERE id = ? AND latitude IS NULL AND longitude IS NULL');
+        $stmt = $pdo->prepare('UPDATE articles SET latitude = ?, longitude = ? WHERE id = ? AND latitude IS NULL AND longitude IS NULL AND converted_update_id IS NULL');
         $stmt->execute([$lat, $lng, $id]);
         if ($stmt->rowCount() !== 1) {
             $stmt = $pdo->prepare('SELECT id FROM articles WHERE id = ?');
@@ -245,12 +291,15 @@ if ($method === 'POST') {
             $stmt->execute([$body, $id]);
         } else {
             $articleId = (int)($input['article_id'] ?? 0);
-            $stmt = $pdo->prepare('SELECT id FROM articles WHERE id = ?');
+            $pdo->beginTransaction();
+            $stmt = $pdo->prepare('SELECT id, converted_update_id FROM articles WHERE id = ? FOR UPDATE');
             $stmt->execute([$articleId]);
-            if (!$stmt->fetch()) { http_response_code(404); echo json_encode(['error' => 'Article not found']); exit; }
+            $parent = $stmt->fetch();
+            if (!$parent || $parent['converted_update_id'] !== null) { $pdo->rollBack(); http_response_code(409); echo json_encode(['error' => 'Article no longer available. Reload its parent incident.']); exit; }
             $stmt = $pdo->prepare('INSERT INTO article_comments (article_id, user_id, body, published_at) VALUES (?, ?, ?, ?)');
             $stmt->execute([$articleId, $currentUserId, $body, date('Y-m-d H:i:s')]);
             $id = (int)$pdo->lastInsertId();
+            $pdo->commit();
         }
         echo json_encode(['message' => 'Comment saved', 'id' => $id]); exit;
     }
@@ -288,6 +337,9 @@ if ($method === 'POST') {
         if ($articleId <= 0 || empty($title) || !$url) { http_response_code(400); echo json_encode(['error' => 'Invalid update payload']); exit; }
         $snapshot = captureArticleSnapshot($url);
         $pdo->beginTransaction();
+        $stmt = $pdo->prepare('SELECT id, converted_update_id FROM articles WHERE id = ? FOR UPDATE');
+        $stmt->execute([$articleId]); $parent = $stmt->fetch();
+        if (!$parent || $parent['converted_update_id'] !== null) { $pdo->rollBack(); http_response_code(409); echo json_encode(['error' => 'Article no longer available. Reload its parent incident.']); exit; }
         $stmt = $pdo->prepare("INSERT INTO article_updates (article_id, user_id, title, url, source_name, published_at) VALUES (:article_id, :user_id, :title, :url, :source_name, :published_at)");
         $success = $stmt->execute(['article_id' => $articleId, 'user_id' => $currentUserId, 'title' => $title, 'url' => $url, 'source_name' => $source, 'published_at' => $pubDate]);
         $updateId = $pdo->lastInsertId();
@@ -392,10 +444,11 @@ if ($method === 'DELETE') {
         echo json_encode(['message' => 'Timeline update deleted']);
         exit;
     }
-    $stmt = $pdo->prepare("SELECT user_id FROM articles WHERE id = :id");
+    $stmt = $pdo->prepare("SELECT user_id, converted_update_id FROM articles WHERE id = :id");
     $stmt->execute(['id' => $id]);
     $article = $stmt->fetch();
     if (!$article) { http_response_code(404); echo json_encode(['error' => 'Article not found']); exit; }
+    if ($article['converted_update_id'] !== null) { http_response_code(409); echo json_encode(['error' => 'This article is now an update. Delete it from its parent incident instead.']); exit; }
     if ($article['user_id'] != $currentUserId && !in_array($currentUserRole, ['moderator', 'admin'])) { http_response_code(403); echo json_encode(['error' => 'Forbidden']); exit; }
     $deleteStmt = $pdo->prepare("DELETE FROM articles WHERE id = :id");
     $deleteStmt->execute(['id' => $id]);

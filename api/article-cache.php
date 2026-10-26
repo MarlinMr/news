@@ -119,7 +119,7 @@ function refreshArticleSnapshot($pdo, $type, $id, $capture = null) {
     $stmt = $pdo->prepare("SELECT * FROM $table WHERE id = ?");
     $stmt->execute([$id]);
     $source = $stmt->fetch();
-    if (!$source) return ['status' => 'not_found'];
+    if (!$source || ($type === 'article' && isset($source['converted_update_id']))) return ['status' => 'not_found'];
     if (preg_match('#^/?pdf/#', $source['url'])) return ['status' => 'pdf'];
     // Fetch outside the transaction; lock the parent only while comparing/writing.
     $snapshot = ($capture ?? 'captureArticleSnapshot')($source['url']);
@@ -129,6 +129,7 @@ function refreshArticleSnapshot($pdo, $type, $id, $capture = null) {
         $stmt->execute([$id]);
         $current = $stmt->fetch();
         if (!$current) { $pdo->rollBack(); return ['status' => 'not_found']; }
+        if ($type === 'article' && isset($current['converted_update_id'])) { $pdo->rollBack(); return ['status' => 'source_changed']; }
         if ($current['url'] !== $source['url']) { $pdo->rollBack(); return ['status' => 'source_changed']; }
         $stmt = $pdo->prepare("UPDATE $table SET cache_checked_at = ? WHERE id = ?");
         $stmt->execute([$snapshot['captured_at'], $id]);

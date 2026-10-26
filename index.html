@@ -924,6 +924,7 @@
     <div class="modal-overlay" id="updateModal">
         <div class="modal">
             <h3>Add Article Update to Event Timeline</h3>
+            <button type="button" onclick="openExistingArticlePicker('source', Number(document.getElementById('parentArticleId').value))">Select existing article</button>
             <button type="button" onclick="openCommentModal(document.getElementById('parentArticleId').value)">Write a comment instead</button>
             
             <label for="updateUrl">Follow-up Article URL</label>
@@ -950,6 +951,18 @@
                 <button class="btn-cancel" onclick="closeModal('updateModal')">Cancel</button>
                 <button class="btn-submit" onclick="saveTimelineUpdate()">Add Update</button>
             </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="existingArticleModal">
+        <div class="modal">
+            <h3 id="existingArticleHeading">Select existing article</h3>
+            <p id="existingArticleHelp"></p>
+            <label for="existingArticleSearch">Search all saved articles (all dates, including inbox)</label>
+            <input type="search" id="existingArticleSearch" placeholder="Search headline or URL…" oninput="scheduleExistingArticleSearch()">
+            <p id="existingArticleStatus" role="status"></p>
+            <div id="existingArticleResults" style="max-height:50vh;overflow:auto;"></div>
+            <div class="modal-buttons"><button class="btn-cancel" onclick="closeModal('existingArticleModal')">Cancel</button></div>
         </div>
     </div>
 
@@ -1447,6 +1460,7 @@
                 }
                 const cached = document.createElement('a'); cached.href = `cached-article.php?id=${item.id}`; cached.textContent = 'Cached article'; cached.target = '_blank'; cached.rel = 'noopener'; links.append(cached);
                 const place = document.createElement('button'); place.type = 'button'; place.className = 'btn-submit'; place.textContent = currentUser ? 'Place on map' : 'Sign in to place'; place.onclick = () => startInboxPlacement(item.id); links.append(place);
+                const attach = document.createElement('button'); attach.type = 'button'; attach.className = 'btn-action'; attach.textContent = 'Add as update to…'; attach.onclick = () => openExistingArticlePicker('parent', item.id); links.append(attach);
                 if (currentUser && (currentUser.id == item.user_id || ['admin', 'moderator'].includes(currentUser.role))) {
                     const refresh = document.createElement('button'); refresh.type = 'button'; refresh.className = 'btn-action'; refresh.textContent = 'Refresh cached text'; refresh.onclick = () => refreshCachedText(item.id, 'article', refresh); links.append(refresh);
                 }
@@ -1626,6 +1640,85 @@
             const now = new Date();
             setPublishInputs('update', now.toISOString());
             document.getElementById('updateModal').style.display = 'flex';
+        }
+
+        let existingArticlePicker = null;
+        let existingArticleTimer = null;
+        let existingArticleRequest = 0;
+        async function openExistingArticlePicker(mode, id) {
+            if (!currentUser) { openAuthModal(); return; }
+            existingArticlePicker = { mode, id, busy: false };
+            closeModal('updateModal'); closeModal('inboxModal');
+            document.getElementById('existingArticleHeading').textContent = mode === 'source' ? 'Select article to add as update' : 'Add this article as an update to…';
+            document.getElementById('existingArticleHelp').textContent = 'The moved article becomes a timeline update. Its cached versions, comments and follow-ups are preserved under the selected incident.';
+            document.getElementById('existingArticleSearch').value = '';
+            document.getElementById('existingArticleModal').style.display = 'flex';
+            document.getElementById('existingArticleSearch').focus();
+            await searchExistingArticles();
+        }
+        function scheduleExistingArticleSearch() {
+            clearTimeout(existingArticleTimer);
+            existingArticleRequest++;
+            existingArticleTimer = setTimeout(searchExistingArticles, 200);
+        }
+        async function searchExistingArticles() {
+            const picker = existingArticlePicker;
+            const request = ++existingArticleRequest;
+            const list = document.getElementById('existingArticleResults');
+            const status = document.getElementById('existingArticleStatus');
+            list.replaceChildren(); status.textContent = 'Loading…';
+            try {
+                const params = new URLSearchParams({ action: 'select_existing', exclude: picker.id, q: document.getElementById('existingArticleSearch').value.trim() });
+                const res = await fetch(`api/articles.php?${params}`);
+                if (!res.ok) throw new Error('Could not load articles.');
+                const items = await res.json();
+                if (request !== existingArticleRequest || picker !== existingArticlePicker) return;
+                status.textContent = items.length ? `${items.length} articles${items.length === 100 ? ' · Refine your search for more results' : ''}` : 'No matching articles.';
+                items.forEach(item => {
+                    const card = document.createElement('article'); card.className = 'inbox-story';
+                    const title = document.createElement('h4'); title.textContent = item.title;
+                    const meta = document.createElement('p'); meta.className = 'inbox-meta'; meta.textContent = `${item.published_at} · ${item.author || 'User'} · ${item.latitude === null ? 'Inbox / no location' : 'On map'}`;
+                    const button = document.createElement('button'); button.type = 'button'; button.className = 'btn-submit'; button.textContent = picker.mode === 'source' ? 'Add as update' : 'Use as parent incident';
+                    const allowed = picker.mode === 'parent' || item.latitude === null || currentUser.id == item.user_id || ['admin', 'moderator'].includes(currentUser.role);
+                    button.disabled = !allowed;
+                    if (!allowed) button.title = 'Only the author or a moderator/admin can move a located article.';
+                    button.onclick = () => convertExistingArticle(item, picker, button);
+                    card.append(title, meta, button); list.append(card);
+                });
+            } catch (error) { if (request === existingArticleRequest) status.textContent = error.message; }
+        }
+        async function convertExistingArticle(item, picker, button) {
+            if (picker.busy) return;
+            picker.busy = true; button.disabled = true;
+            const sourceId = picker.mode === 'source' ? item.id : picker.id;
+            const parentId = picker.mode === 'source' ? picker.id : item.id;
+            try {
+                const res = await fetch('api/articles.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'convert_to_update', id: sourceId, article_id: parentId }) });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Could not move article.');
+                closeModal('existingArticleModal'); map.closePopup();
+                await fetchArticlesFromAPI();
+                await openIncidentLink(parentId);
+            } catch (error) { document.getElementById('existingArticleStatus').textContent = error.message; }
+            finally { picker.busy = false; button.disabled = false; }
+        }
+
+        async function openIncidentLink(id) {
+            try {
+                const res = await fetch(`api/articles.php?action=resolve&id=${encodeURIComponent(id)}`);
+                const target = await res.json();
+                if (!res.ok) throw new Error(target.error || 'Article not found.');
+                // Include older parents even when they fall outside the current map range.
+                const day = target.published_at.slice(0, 10);
+                const start = document.getElementById('startDate');
+                const end = document.getElementById('endDate');
+                if (start && end && (day < start.value || day > end.value)) {
+                    if (day < start.value) start.value = day;
+                    if (day > end.value) end.value = day;
+                    await fetchArticlesFromAPI();
+                }
+                focusIncident(target.article_id);
+            } catch (error) { alert(error.message); }
         }
 
         async function fetchMetadata(url) {
@@ -1828,7 +1921,7 @@
                     renderMarkers();
 
                     if (initialTargetId) {
-                        focusIncident(initialTargetId);
+                        openIncidentLink(initialTargetId);
                         initialTargetId = null;
                     }
                 }
@@ -2082,6 +2175,7 @@
 
                             <div class="card-actions">
                                 <button class="btn-action btn-add-update" onclick="openUpdateModal(${item.id})">+ Add Update</button>
+                                ${currentUser && (canEdit || item.latitude === null) ? `<button class="btn-action" onclick="openExistingArticlePicker('parent', ${item.id})">Add as update to…</button>` : ''}
                                 <button class="btn-action btn-direct-link" onclick="copyDirectLink(${item.id})">Direct Link</button>
                                 ${canEdit ? `
                                     <button class="btn-action" style="color:#0284c7;" onclick="refreshArticleMetadata(${item.id})">🔄 Refresh Data</button>

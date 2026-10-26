@@ -53,6 +53,8 @@ CREATE TABLE `articles` (
     `killed_count` INT NOT NULL DEFAULT 0,
     `published_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `cache_checked_at` DATETIME NULL DEFAULT NULL,
+    `converted_update_id` INT NULL DEFAULT NULL,
+    INDEX article_converted_update (converted_update_id),
     FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

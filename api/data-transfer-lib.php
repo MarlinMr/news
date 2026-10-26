@@ -3,6 +3,7 @@
 const TRANSFER_MAX_ARCHIVE = 128 * 1024 * 1024;
 const TRANSFER_MAX_EXPANDED = 256 * 1024 * 1024;
 const TRANSFER_MAX_JSON = 64 * 1024 * 1024;
+require_once __DIR__ . '/article-conversion.php';
 
 function transferDate($value, $withTime = false) {
     $format = $withTime ? 'Y-m-d H:i:s' : 'Y-m-d';
@@ -28,22 +29,28 @@ function transferExport($pdo, $start, $end, $pdfDirectory, $archivePath) {
     $origin = transferOrigin($pdo);
     $pdo->beginTransaction();
     try {
-        $stmt = $pdo->prepare('SELECT * FROM articles WHERE published_at >= ? AND published_at <= ? ORDER BY id');
-        $stmt->execute([$start . ' 00:00:00', $end . ' 23:59:59']);
+        // Include the parent incident when a converted article falls in the range,
+        // and all hidden identities belonging to each selected incident.
+        $rangeStart = $pdo->quote($start . ' 00:00:00');
+        $rangeEnd = $pdo->quote($end . ' 23:59:59');
+        $selection = "SELECT COALESCE(u.article_id, selected.id) FROM articles selected LEFT JOIN article_updates u ON u.id = selected.converted_update_id WHERE selected.published_at >= $rangeStart AND selected.published_at <= $rangeEnd AND (selected.converted_update_id IS NULL OR u.id IS NOT NULL)";
+        $rootFilter = "a.id IN ($selection)";
+        $stmt = $pdo->prepare("SELECT a.* FROM articles a LEFT JOIN article_updates converted ON converted.id = a.converted_update_id WHERE $rootFilter OR converted.article_id IN ($selection) ORDER BY a.id");
+        $stmt->execute();
         $articles = $stmt->fetchAll();
         $updates = []; $comments = []; $snapshots = []; $users = [];
         if ($articles) {
-            // Join on publication dates instead of expanding an unbounded IN clause.
+            // Select parents in SQL instead of expanding an unbounded ID list.
             foreach (['article_updates' => 'updates', 'article_comments' => 'comments'] as $table => $variable) {
-                $stmt = $pdo->prepare("SELECT child.* FROM $table child JOIN articles a ON a.id = child.article_id WHERE a.published_at >= ? AND a.published_at <= ? ORDER BY child.id");
-                $stmt->execute([$start . ' 00:00:00', $end . ' 23:59:59']);
+                $stmt = $pdo->prepare("SELECT child.* FROM $table child JOIN articles a ON a.id = child.article_id WHERE $rootFilter ORDER BY child.id");
+                $stmt->execute();
                 $$variable = $stmt->fetchAll();
             }
-            $stmt = $pdo->prepare('SELECT COALESCE(SUM(OCTET_LENGTH(s.article_text) + OCTET_LENGTH(s.summary) + OCTET_LENGTH(s.title) + OCTET_LENGTH(s.url) + 256), 0) FROM article_snapshots s LEFT JOIN article_updates au ON au.id = s.update_id JOIN articles a ON a.id = COALESCE(s.article_id, au.article_id) WHERE a.published_at >= ? AND a.published_at <= ?');
-            $stmt->execute([$start . ' 00:00:00', $end . ' 23:59:59']);
+            $stmt = $pdo->prepare("SELECT COALESCE(SUM(OCTET_LENGTH(s.article_text) + OCTET_LENGTH(s.summary) + OCTET_LENGTH(s.title) + OCTET_LENGTH(s.url) + 256), 0) FROM article_snapshots s LEFT JOIN article_updates au ON au.id = s.update_id JOIN articles a ON a.id = COALESCE(s.article_id, au.article_id) WHERE $rootFilter");
+            $stmt->execute();
             if ((int)$stmt->fetchColumn() > TRANSFER_MAX_JSON) throw new InvalidArgumentException('Snapshot history is too large. Export a smaller date range.');
-            $stmt = $pdo->prepare('SELECT s.* FROM article_snapshots s LEFT JOIN article_updates au ON au.id = s.update_id JOIN articles a ON a.id = COALESCE(s.article_id, au.article_id) WHERE a.published_at >= ? AND a.published_at <= ? ORDER BY s.id');
-            $stmt->execute([$start . ' 00:00:00', $end . ' 23:59:59']);
+            $stmt = $pdo->prepare("SELECT s.* FROM article_snapshots s LEFT JOIN article_updates au ON au.id = s.update_id JOIN articles a ON a.id = COALESCE(s.article_id, au.article_id) WHERE $rootFilter ORDER BY s.id");
+            $stmt->execute();
             $snapshots = $stmt->fetchAll();
             $userIds = array_unique(array_column(array_merge($articles, $updates, $comments), 'user_id'));
             foreach (array_chunk($userIds, 1000) as $chunk) {
@@ -57,7 +64,7 @@ function transferExport($pdo, $start, $end, $pdfDirectory, $archivePath) {
         $pdo->rollBack();
         throw $e;
     }
-    $data = ['format' => 'geonews', 'version' => 3, 'origin' => $origin,
+    $data = ['format' => 'geonews', 'version' => 4, 'origin' => $origin,
         'exported_at' => date(DATE_ATOM), 'timezone' => 'Europe/Oslo',
         'range' => ['start_date' => $start, 'end_date' => $end],
         'users' => $users, 'articles' => $articles, 'updates' => $updates,
@@ -101,7 +108,7 @@ function transferId($id) {
 }
 
 function transferValidate($data) {
-    if (!is_array($data) || ($data['format'] ?? '') !== 'geonews' || !in_array($data['version'] ?? null, [1, 2, 3], true)
+    if (!is_array($data) || ($data['format'] ?? '') !== 'geonews' || !in_array($data['version'] ?? null, [1, 2, 3, 4], true)
         || !is_string($data['origin'] ?? null) || !preg_match('/^[a-f0-9]{32}$/D', $data['origin'])) {
         throw new InvalidArgumentException('Not a supported GeoNews archive.');
     }
@@ -136,6 +143,11 @@ function transferValidate($data) {
         if (!transferPdfPath($url) && !(filter_var($url, FILTER_VALIDATE_URL) && in_array(strtolower(parse_url($url, PHP_URL_SCHEME) ?? ''), ['http', 'https'], true))) throw new InvalidArgumentException('Invalid article URL.');
         if ($group === 'updates') transferText($row, 'source_name', 100, true);
         if ($group === 'articles') {
+            if (isset($row['converted_update_id'])) {
+                if ($data['version'] < 4) throw new InvalidArgumentException('Unsupported converted article.');
+                $converted = $indexes['updates'][transferId($row['converted_update_id'])] ?? null;
+                if (!$converted || $converted['article_id'] == $row['id'] || isset($indexes['articles'][$converted['article_id']]['converted_update_id'])) throw new InvalidArgumentException('Invalid converted article parent.');
+            }
             transferText($row, 'summary', 65535, true);
             transferText($row, 'image_url', 500, true);
             if (!empty($row['image_url']) && !(filter_var($row['image_url'], FILTER_VALIDATE_URL) && in_array(strtolower(parse_url($row['image_url'], PHP_URL_SCHEME) ?? ''), ['http', 'https'], true))) throw new InvalidArgumentException('Invalid image URL.');
@@ -160,7 +172,7 @@ function transferValidate($data) {
             $parent = transferId($row[$isArticle ? 'article_id' : 'update_id']);
             if (!isset($indexes[$isArticle ? 'articles' : 'updates'][$parent])) throw new InvalidArgumentException('Missing snapshot parent.');
             $key = ($isArticle ? 'article:' : 'update:') . $parent;
-            if ($data['version'] === 3) {
+            if ($data['version'] >= 3) {
                 if (!is_string($row['version_key'] ?? null) || !preg_match('/^[a-f0-9]{32}$/D', $row['version_key'])) throw new InvalidArgumentException('Invalid snapshot version key.');
                 $key .= ':' . $row['version_key'];
             }
@@ -205,6 +217,8 @@ function transferImport($pdo, $archivePath, $pdfDirectory) {
     $maps = []; $pdfMap = [];
     $counts = ['articles' => 0, 'updates' => 0, 'comments' => 0, 'snapshots' => 0, 'pdfs' => 0, 'located' => 0, 'skipped' => 0];
     $tables = ['users' => 'users', 'articles' => 'articles', 'updates' => 'article_updates', 'comments' => 'article_comments'];
+    $convertedIdentities = [];
+    foreach ($data['articles'] as $identity) if (isset($identity['converted_update_id'])) $convertedIdentities[$identity['converted_update_id']] = $identity['id'];
     $columns = [
         'articles' => ['user_id', 'title', 'summary', 'url', 'image_url', 'emoji', 'category_slug', 'latitude', 'longitude', 'injured_count', 'killed_count', 'published_at', 'cache_checked_at'],
         'updates' => ['article_id', 'user_id', 'title', 'url', 'source_name', 'published_at', 'cache_checked_at'],
@@ -242,9 +256,19 @@ function transferImport($pdo, $archivePath, $pdfDirectory) {
         foreach ($tables as $group => $table) {
             $maps[$group] = [];
             foreach ($data[$group] as $row) {
-                $stmt = $pdo->prepare("SELECT m.local_id FROM data_transfer_records m JOIN $table t ON t.id = m.local_id WHERE m.origin = ? AND m.record_type = ? AND m.source_id = ?");
+                $stmt = $pdo->prepare("SELECT m.local_id FROM data_transfer_records m JOIN $table t ON t.id = m.local_id WHERE m.origin = ? AND m.record_type = ? AND m.source_id = ? FOR UPDATE");
                 $stmt->execute([$origin, $group, $row['id']]);
                 $localId = $stmt->fetchColumn();
+                // A local conversion and a later source conversion of the same
+                // imported article must share one update, not create a duplicate.
+                if (!$localId && $group === 'updates' && isset($convertedIdentities[$row['id']])) {
+                    $destination = articleDestination($pdo, $maps['articles'][$convertedIdentities[$row['id']]]);
+                    if ($destination && $destination['update_id']) {
+                        $localId = $destination['update_id'];
+                        $stmt = $pdo->prepare('INSERT INTO data_transfer_records (origin, record_type, source_id, local_id) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE local_id = VALUES(local_id)');
+                        $stmt->execute([$origin, $group, $row['id'], $localId]);
+                    }
+                }
                 if (!$localId) {
                     $values = $row;
                     if ($group === 'users') {
@@ -264,7 +288,11 @@ function transferImport($pdo, $archivePath, $pdfDirectory) {
                         $stmt->execute([$username, $origin . '-' . $row['id'] . '@offline.invalid', password_hash(bin2hex(random_bytes(32)), PASSWORD_DEFAULT), 'user']);
                     } else {
                         $values['user_id'] = $maps['users'][$row['user_id']];
-                        if (isset($row['article_id'])) $values['article_id'] = $maps['articles'][$row['article_id']];
+                        if (isset($row['article_id'])) {
+                            $mappedParent = $maps['articles'][$row['article_id']];
+                            $destination = articleDestination($pdo, $mappedParent);
+                            $values['article_id'] = $destination ? $destination['article_id'] : $mappedParent;
+                        }
                         if (isset($row['url']) && ($path = transferPdfPath($row['url']))) $values['url'] = $pdfMap[$path];
                         $fields = $columns[$group];
                         $stmt = $pdo->prepare("INSERT INTO $table (" . implode(',', $fields) . ') VALUES (' . implode(',', array_fill(0, count($fields), '?')) . ')');
@@ -279,7 +307,7 @@ function transferImport($pdo, $archivePath, $pdfDirectory) {
                     if ($group === 'articles' && isset($row['latitude'], $row['longitude'])) {
                         // Fill only an unlocated destination. The conditional UPDATE also
                         // preserves a local placement made concurrently with this import.
-                        $stmt = $pdo->prepare('UPDATE articles SET latitude = ?, longitude = ? WHERE id = ? AND latitude IS NULL AND longitude IS NULL');
+                        $stmt = $pdo->prepare('UPDATE articles SET latitude = ?, longitude = ? WHERE id = ? AND latitude IS NULL AND longitude IS NULL AND converted_update_id IS NULL');
                         $stmt->execute([$row['latitude'], $row['longitude'], $localId]);
                         $located = $stmt->rowCount() === 1;
                         if ($located) $counts['located']++;
@@ -294,10 +322,10 @@ function transferImport($pdo, $archivePath, $pdfDirectory) {
             $column = $isArticle ? 'article_id' : 'update_id';
             $localId = $maps[$isArticle ? 'articles' : 'updates'][$row[$column]];
             $url = ($path = transferPdfPath($row['url'])) ? $pdfMap[$path] : $row['url'];
-            $versionKey = $data['version'] === 3 ? $row['version_key'] : substr(hash('sha256', 'geonews-legacy-snapshot:' . $origin . ':' . $row['id']), 0, 32);
+            $versionKey = $data['version'] >= 3 ? $row['version_key'] : substr(hash('sha256', 'geonews-legacy-snapshot:' . $origin . ':' . $row['id']), 0, 32);
             // Version keys preserve distinct captures even if content/timestamps repeat.
             // Content matching is only needed for old archives without version keys.
-            if ($data['version'] === 3) {
+            if ($data['version'] >= 3) {
                 $stmt = $pdo->prepare("SELECT id FROM article_snapshots WHERE $column = ? AND version_key = ?");
                 $stmt->execute([$localId, $versionKey]);
             } else {
@@ -308,6 +336,21 @@ function transferImport($pdo, $archivePath, $pdfDirectory) {
             $stmt = $pdo->prepare('INSERT INTO article_snapshots (article_id, update_id, version_key, title, url, summary, published_at, article_text, captured_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
             $stmt->execute([$isArticle ? $localId : null, $isArticle ? null : $localId, $versionKey, $row['title'], $url, $row['summary'], $row['published_at'], $row['article_text'], $row['captured_at']]);
             $counts['snapshots']++;
+        }
+        foreach ($data['articles'] as $row) {
+            $localId = $maps['articles'][$row['id']];
+            if (isset($row['converted_update_id'])) {
+                $destination = articleDestination($pdo, $localId);
+                if ($destination && !$destination['update_id']) {
+                    $updateId = $maps['updates'][$row['converted_update_id']];
+                    $stmt = $pdo->prepare('SELECT article_id FROM article_updates WHERE id = ?');
+                    $stmt->execute([$updateId]);
+                    $parentId = (int)$stmt->fetchColumn();
+                    $parent = articleDestination($pdo, $parentId);
+                    convertArticleToUpdate($pdo, $localId, $parent['article_id'], null, 'user', $updateId);
+                }
+            }
+            reconcileConvertedArticle($pdo, $localId);
         }
         $pdo->commit();
         return $counts;

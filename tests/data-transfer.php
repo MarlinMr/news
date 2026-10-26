@@ -103,7 +103,7 @@ try {
     $source->exec("INSERT INTO article_snapshots (article_id, version_key, title, url, summary, published_at, article_text, captured_at) VALUES ($sourceInboxId, REPLACE(UUID(), '-', ''), 'Original inbox title', 'https://example.com/inbox', 'Original summary', '2026-10-01 15:00:00', 'Original inbox text', '2026-10-01 15:01:00')");
     transferExport($source, '2026-10-01', '2026-10-01', $directory . '/source', $archive);
     [$inboxZip, $inboxData] = transferReadArchive($archive); $inboxZip->close();
-    transferCheck($inboxData['version'] === 3, 'Export versioned snapshot archive format');
+    transferCheck($inboxData['version'] === 4, 'Export conversion-aware snapshot archive format');
     $inboxResult = transferImport($destination, $archive, $directory . '/destination');
     transferCheck($inboxResult['articles'] === 1, 'Import unlocated stories');
     $inboxRow = $destination->query("SELECT id, latitude, longitude FROM articles WHERE url = 'https://example.com/inbox'")->fetch();

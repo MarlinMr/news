@@ -120,9 +120,9 @@ Both coordinates must be null for an inbox story, or both must contain valid map
 coordinates. No placeholder pins at `(0, 0)` are created. New databases use the
 updated `docker/schema.sql` automatically. Inbox stories and their cached text
 are included in date-range exports, along with every saved snapshot version.
-New exports use archive format version 3; updated installations can still import
-version 1 and 2 archives. Upgrade the destination application and schema before
-importing version 3 archives.
+New exports use archive format version 4; updated installations can still import
+version 1, 2 and 3 archives. Upgrade the destination application and schema before
+importing version 4 archives.
 
 For API clients, `POST api/articles.php` with `action: "add_inbox"` and the usual
 title, URL, summary, etc. saves an unlocated story. `GET ?location=inbox` lists
@@ -130,6 +130,43 @@ all inbox stories; `GET ?location=all` includes mapped and unlocated articles
 within the requested date range. The default GET lists only mapped articles.
 `POST` with `action: "place_inbox"`, `id`, `latitude`, and `longitude` places a
 story using any signed-in account.
+
+### Move an existing article into an incident's timeline
+
+There are two entry points for the same action:
+
+- On the parent incident, choose **+ Add Update → Select existing article**.
+- On the article to move, choose **Add as update to…**, then select its parent
+  incident. This action is also available on every unlocated inbox story.
+
+The selector searches headlines and URLs across all dates, including the inbox.
+The moved article becomes a real timeline update and leaves the standalone map,
+feed and inbox. Its original author, publication date and all cached versions are
+preserved. Comments and existing follow-ups move into the parent timeline.
+The original article metadata remains stored as a hidden identity; old direct
+links and cached-version links resolve to the parent/update. Repeated offline
+imports preserve that identity instead of recreating a standalone pin. Exports
+include the complete parent incident when a moved article falls in the date range.
+
+Any signed-in user can move an unlocated story. Located stories require the
+original author or a moderator/admin. The parent may be located or unlocated.
+Concurrent/repeated moves cannot place the same story under multiple incidents.
+
+**Existing installations:** after the earlier migrations, apply
+`docker/article-conversion.sql` once to both online and offline databases before
+deploying this feature:
+
+```sql
+ALTER TABLE articles ADD COLUMN converted_update_id INT NULL DEFAULT NULL,
+    ADD INDEX article_converted_update (converted_update_id);
+```
+
+Fresh databases include this in `docker/schema.sql`. For API clients, use
+`POST api/articles.php` with `action: "convert_to_update"`, `id` (article to
+move), and `article_id` (parent incident). `GET ?action=select_existing&q=…`
+searches available incidents; `GET ?action=resolve&id=…` resolves old IDs.
+The NRK watcher checks `GET ?action=existing_urls` so moved stories stay deduplicated
+even when their parent's publication date is outside the RSS story's date range.
 
 ### Export / Import
 
