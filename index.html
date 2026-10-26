@@ -806,16 +806,16 @@
                     <select id="bottomTimelineView" class="category-select" onchange="changeBottomTimelineView(this.value)">
                         <option value="week">Week view</option>
                         <option value="workweek">Work week (Mon–Fri)</option>
-                        <option value="three-days">Last 3 days</option>
+                        <option value="three-days" selected>Last 3 days</option>
                         <option value="month">Month view</option>
                     </select>
                     <span class="timeline-date-range" id="bottomTimelineRange">--</span>
                     <span class="timeline-count-badge" id="bottomTimelineCount">0 events</span>
                 </div>
                 <div class="bottom-timeline-nav">
-                    <button type="button" id="timelinePrev" class="btn-timeline-nav" onclick="shiftBottomTimelinePeriod(-1)" title="Previous week" aria-label="Previous week"><svg class="timeline-control-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m10 4-4 4 4 4"/></svg></button>
-                    <button type="button" id="timelineCurrent" class="btn-timeline-nav" onclick="resetBottomTimelinePeriod()" title="Reset to current week" aria-label="Reset to current week">Now</button>
-                    <button type="button" id="timelineNext" class="btn-timeline-nav" onclick="shiftBottomTimelinePeriod(1)" title="Next week" aria-label="Next week"><svg class="timeline-control-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg></button>
+                    <button type="button" id="timelinePrev" class="btn-timeline-nav" onclick="shiftBottomTimelinePeriod(-1)" title="Previous 3 days" aria-label="Previous 3 days"><svg class="timeline-control-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m10 4-4 4 4 4"/></svg></button>
+                    <button type="button" id="timelineCurrent" class="btn-timeline-nav" onclick="resetBottomTimelinePeriod()" title="Reset to current 3 days" aria-label="Reset to current 3 days">Now</button>
+                    <button type="button" id="timelineNext" class="btn-timeline-nav" onclick="shiftBottomTimelinePeriod(1)" title="Next 3 days" aria-label="Next 3 days"><svg class="timeline-control-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg></button>
                     <button type="button" class="btn-timeline-toggle" onclick="toggleBottomTimeline()" id="btnToggleTimeline" title="Minimize timeline" aria-label="Minimize timeline"><svg class="timeline-control-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></button>
                 </div>
             </div>
@@ -2391,7 +2391,7 @@
            BOTTOM TIMELINE CONTROLS & RENDERING
            ================================================================== */
         let bottomTimelinePeriodOffset = 0;
-        let bottomTimelineView = 'week';
+        let bottomTimelineView = 'three-days';
         let selectedTimelineIncidentId = null;
         let bottomTimelineBaseDate = null;
         let isBottomTimelineMinimized = false;
