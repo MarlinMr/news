@@ -4,3 +4,5 @@
 api/db.php
 api/config.php
 pdf
+**/__pycache__
+**/*.pyc

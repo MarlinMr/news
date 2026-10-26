@@ -293,6 +293,17 @@
         .modal label { font-size: 12px; font-weight: 700; color: #334155; display: block; margin-top: 10px; }
         .modal input, .modal textarea { width: 100%; padding: 8px 10px; margin-top: 4px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; }
         .modal .category-select { width: 100%; padding: 8px 10px; margin-top: 4px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #0f172a; font-size: 14px; color-scheme: light; }
+        .inbox-button { padding: 8px 12px; border: 1px solid #60a5fa; border-radius: 4px; background: #2563eb; color: white; cursor: pointer; text-align: left; }
+        .inbox-modal { width: 680px; }
+        .inbox-story { border-top: 1px solid #e2e8f0; padding: 16px 0; overflow-wrap: anywhere; }
+        .inbox-story h4 { color: #0f172a; margin-bottom: 6px; }
+        .inbox-story p { color: #475569; font-size: 13px; margin-bottom: 8px; }
+        .inbox-story .inbox-meta, .inbox-status { color: #64748b; font-size: 12px; margin: 8px 0; }
+        .inbox-links { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; font-size: 13px; }
+        .inbox-links a { color: #0369a1; }
+        .placement-banner { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100% - 24px); z-index: 1001; padding: 12px; border-radius: 6px; background: #1e293b; color: white; box-shadow: 0 2px 8px #0006; display: flex; align-items: center; gap: 12px; font-size: 13px; overflow-wrap: anywhere; }
+        .placement-banner[hidden] { display: none; }
+        #map.placing-inbox { cursor: crosshair; }
         
         .emoji-grid { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; max-height: 160px; overflow-y: auto; padding: 2px; border: 1px solid #cbd5e1; border-radius: 4px; }
         .emoji-btn { font-size: 16px; padding: 4px 6px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer; }
@@ -633,6 +644,7 @@
                 <summary>Menu</summary>
                 <div class="header-menu-panel">
                     <nav class="header-links" aria-label="Help"><a href="docs/">Docs / How-to</a></nav>
+                    <button type="button" class="inbox-button" id="inboxButton" onclick="openInbox()">Inbox</button>
                     <div class="auth-bar" id="authBar"></div>
                     <div class="controls-group">
                         <div class="map-style-control">
@@ -738,6 +750,10 @@
     </header>
 
     <div class="main-wrapper" id="mainWrapper">
+        <div class="placement-banner" id="inboxPlacementBanner" role="status" hidden>
+            <span id="inboxPlacementHint"></span>
+            <button type="button" class="btn-cancel" onclick="cancelInboxPlacement()">Cancel</button>
+        </div>
         <div id="map"></div>
 
         <div class="sidebar" id="sidebar">
@@ -977,6 +993,31 @@
     </div>
 
     <!-- JS Libraries -->
+    <div class="modal-overlay" id="inboxModal" role="dialog" aria-modal="true" aria-labelledby="inboxTitle">
+        <div class="modal inbox-modal">
+            <h3 id="inboxTitle">Unlocated stories</h3>
+            <p class="inbox-status">These stories are saved, including their cached text, but need a map location. Any signed-in user can place them. All dates and categories are included.</p>
+            <label for="inboxSearch">Search inbox</label>
+            <input id="inboxSearch" type="search" placeholder="Search titles or summaries" oninput="renderInbox()">
+            <p class="inbox-status" id="inboxStatus" role="status" aria-live="polite"></p>
+            <div id="inboxStories"></div>
+            <div class="modal-buttons">
+                <button type="button" class="btn-cancel" onclick="closeModal('inboxModal')">Close</button>
+            </div>
+        </div>
+    </div>
+    <div class="modal-overlay" id="inboxPlaceModal" role="dialog" aria-modal="true" aria-labelledby="inboxPlaceTitle">
+        <div class="modal">
+            <h3 id="inboxPlaceTitle">Place story on map</h3>
+            <p id="inboxPlaceStory"></p>
+            <p class="inbox-status" id="inboxPlaceCoordinates"></p>
+            <div class="modal-buttons">
+                <button type="button" class="btn-cancel" onclick="chooseAnotherInboxLocation()">Choose another spot</button>
+                <button type="button" class="btn-submit" id="confirmInboxPlacement" onclick="saveInboxPlacement()">Place here</button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
@@ -1066,6 +1107,10 @@
         let currentUser = null;
         let isRegisterMode = false;
         let articlesData = [];
+        let inboxData = [];
+        let placingInboxId = null;
+        let inboxPlacementCoordinates = null;
+        let inboxPlacementSaving = false;
         let markersMap = {};
         let initialTargetId = null;
         let detectedCoords = null;
@@ -1238,6 +1283,10 @@
         });
         document.addEventListener('keydown', event => {
             const menu = document.getElementById('headerMenu');
+            if (event.key === 'Escape' && placingInboxId !== null) {
+                cancelInboxPlacement();
+                return;
+            }
             if (event.key === 'Escape' && menu.open) {
                 menu.open = false;
                 menu.querySelector('summary').focus();
@@ -1285,6 +1334,7 @@
                     authBar.innerHTML = `<button class="btn-login" onclick="openAuthModal()">Login / Register</button>`;
                 }
                 renderMarkers();
+                renderInbox();
             } catch (err) { console.error('Session check failed:', err); }
         }
 
@@ -1326,6 +1376,7 @@
         }
 
         async function logout() {
+            cancelInboxPlacement();
             await fetch('api/auth.php?action=logout');
             checkSession();
             fetchArticlesFromAPI();
@@ -1337,8 +1388,129 @@
                 openAuthModal();
                 return;
             }
+            if (placingInboxId !== null) {
+                if (inboxPlacementSaving) return;
+                inboxPlacementCoordinates = { latitude: e.latlng.lat, longitude: e.latlng.lng };
+                const story = inboxData.find(item => item.id == placingInboxId);
+                document.getElementById('inboxPlaceStory').textContent = story?.title || 'Selected story';
+                document.getElementById('inboxPlaceCoordinates').textContent = `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`;
+                document.getElementById('inboxPlaceModal').style.display = 'flex';
+                document.getElementById('confirmInboxPlacement').focus();
+                return;
+            }
             openAddModal(e.latlng.lat, e.latlng.lng);
         });
+
+        async function fetchInbox() {
+            try {
+                const response = await fetch('api/articles.php?location=inbox', { cache: 'no-store' });
+                if (!response.ok) throw new Error('Could not load the inbox.');
+                inboxData = await response.json();
+                document.getElementById('inboxButton').textContent = `Inbox (${inboxData.length})`;
+                renderInbox();
+            } catch (error) {
+                document.getElementById('inboxStatus').textContent = error.message;
+            }
+        }
+
+        async function openInbox(articleId = null) {
+            document.getElementById('headerMenu').open = false;
+            document.getElementById('inboxSearch').value = '';
+            document.getElementById('inboxModal').style.display = 'flex';
+            document.getElementById('inboxStatus').textContent = 'Loading inbox…';
+            await fetchInbox();
+            if (articleId !== null) {
+                const story = inboxData.find(item => item.id == articleId);
+                if (story) { document.getElementById('inboxSearch').value = story.title; renderInbox(); }
+            }
+            document.getElementById('inboxSearch').focus();
+        }
+
+        function renderInbox() {
+            const list = document.getElementById('inboxStories');
+            const query = document.getElementById('inboxSearch').value.trim().toLowerCase();
+            const stories = inboxData.filter(item => `${item.title} ${item.summary || ''}`.toLowerCase().includes(query));
+            list.replaceChildren();
+            document.getElementById('inboxStatus').textContent = inboxData.length ? `${stories.length} of ${inboxData.length} stories awaiting a location.` : 'The inbox is empty.';
+            stories.forEach(item => {
+                const card = document.createElement('article'); card.className = 'inbox-story';
+                const title = document.createElement('h4'); title.textContent = `${item.emoji} ${item.title}`;
+                const meta = document.createElement('p'); meta.className = 'inbox-meta';
+                meta.textContent = `${parsePublishDate(item.published_at).toLocaleString(undefined, { timeZone: APP_TIMEZONE })} · ${item.author || 'User'}`;
+                const summary = document.createElement('p'); summary.textContent = item.summary || '';
+                const links = document.createElement('div'); links.className = 'inbox-links';
+                if (/^https?:\/\//i.test(item.url) || /^\/?pdf\/[a-f0-9]{32}\.pdf$/.test(item.url)) {
+                    const original = document.createElement('a'); original.href = item.url; original.textContent = 'Original article'; original.target = '_blank'; original.rel = 'noopener'; links.append(original);
+                }
+                const cached = document.createElement('a'); cached.href = `cached-article.php?id=${item.id}`; cached.textContent = 'Cached article'; cached.target = '_blank'; cached.rel = 'noopener'; links.append(cached);
+                const place = document.createElement('button'); place.type = 'button'; place.className = 'btn-submit'; place.textContent = currentUser ? 'Place on map' : 'Sign in to place'; place.onclick = () => startInboxPlacement(item.id); links.append(place);
+                card.append(title, meta, summary, links); list.append(card);
+            });
+        }
+
+        function startInboxPlacement(id) {
+            closeModal('inboxModal');
+            if (!currentUser) { openAuthModal(); return; }
+            const story = inboxData.find(item => item.id == id);
+            if (!story) return;
+            placingInboxId = id;
+            inboxPlacementCoordinates = null;
+            document.getElementById('inboxPlacementHint').textContent = `Click the map to place: ${story.title}`;
+            document.getElementById('inboxPlacementBanner').hidden = false;
+            map.getContainer().classList.add('placing-inbox');
+            map.closePopup();
+        }
+
+        function cancelInboxPlacement() {
+            if (inboxPlacementSaving) return;
+            placingInboxId = null;
+            inboxPlacementCoordinates = null;
+            document.getElementById('inboxPlacementBanner').hidden = true;
+            map.getContainer().classList.remove('placing-inbox');
+            closeModal('inboxPlaceModal');
+        }
+
+        function chooseAnotherInboxLocation() {
+            if (!inboxPlacementSaving) closeModal('inboxPlaceModal');
+        }
+
+        async function saveInboxPlacement() {
+            if (inboxPlacementSaving || placingInboxId === null || !inboxPlacementCoordinates) return;
+            const id = placingInboxId;
+            const story = inboxData.find(item => item.id == id);
+            inboxPlacementSaving = true;
+            document.getElementById('confirmInboxPlacement').disabled = true;
+            try {
+                const response = await fetch('api/articles.php', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'place_inbox', id, ...inboxPlacementCoordinates })
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    if (response.status === 409 || response.status === 404) {
+                        inboxPlacementSaving = false; cancelInboxPlacement(); await fetchArticlesFromAPI();
+                    }
+                    throw new Error(data.error || 'Could not place this story.');
+                }
+                inboxPlacementSaving = false;
+                cancelInboxPlacement();
+                // Reveal the new pin even when the inbox story was outside current filters.
+                if (story) {
+                    const date = story.published_at.slice(0, 10);
+                    if (date < document.getElementById('startDate').value) document.getElementById('startDate').value = date;
+                    if (date > document.getElementById('endDate').value) document.getElementById('endDate').value = date;
+                    document.querySelectorAll('.btn-preset').forEach(button => button.classList.remove('active'));
+                    const category = document.getElementById('categoryFilter');
+                    if (category.selectedOptions[0].dataset.slug !== 'all' && category.selectedOptions[0].dataset.slug !== story.category_slug) category.value = 'ALL';
+                }
+                initialTargetId = id;
+                await fetchArticlesFromAPI();
+            } catch (error) { alert(error.message); }
+            finally {
+                inboxPlacementSaving = false;
+                document.getElementById('confirmInboxPlacement').disabled = false;
+            }
+        }
 
         function closeModal(modalId) { document.getElementById(modalId).style.display = 'none'; }
         function clearModalInputs() {
@@ -1642,7 +1814,9 @@
             if (timelineEndStr > apiEnd) apiEnd = timelineEndStr;
 
             try {
-                const res = await fetch(`api/articles.php?start_date=${apiStart}&end_date=${apiEnd}`);
+                const [res] = await Promise.all([
+                    fetch(`api/articles.php?start_date=${apiStart}&end_date=${apiEnd}`), fetchInbox()
+                ]);
                 if (res.ok) {
                     articlesData = await res.json();
                     renderMarkers();
@@ -1784,6 +1958,7 @@
             let visibleCount = 0;
 
             articlesData.forEach(item => {
+                if (item.latitude === null || item.longitude === null) return;
                 const pubDate = parsePublishDate(item.published_at);
                 
                 const matchesCat = (selectedCatSlug === 'all' || item.category_slug === selectedCatSlug);
@@ -1911,6 +2086,7 @@
         }
 
         function focusIncident(id) {
+            if (inboxData.some(item => item.id == id)) { openInbox(id); return; }
             highlightTimelineIncident(id);
             const item = articlesData.find(a => a.id == id);
             const marker = markersMap[id];
@@ -1918,8 +2094,10 @@
             if (item && marker) {
                 map.flyTo([item.latitude, item.longitude], 15, { duration: 1.2 });
                 setTimeout(() => {
+                    // A placement or inbox refresh may have rebuilt the marker layer.
+                    if (markersMap[id] !== marker || !markersCluster.hasLayer(marker)) return;
                     markersCluster.zoomToShowLayer(marker, () => {
-                        marker.openPopup();
+                        if (markersMap[id] === marker && map.hasLayer(marker)) marker.openPopup();
                     });
                 }, 500);
             }

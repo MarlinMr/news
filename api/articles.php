@@ -98,8 +98,15 @@ $categoryEmojiMap = [
 // 6. GET: FETCH ARTICLES (WITH TIMELINE UPDATES)
 // ------------------------------------------------------------------
 if ($method === 'GET') {
-    $startDate = $_GET['start_date'] ?? date('Y-m-d', strtotime('-1 year'));
-    $endDate   = $_GET['end_date'] ?? date('Y-m-d');
+    $location = $_GET['location'] ?? 'map';
+    if (!in_array($location, ['map', 'inbox', 'all'], true)) {
+        http_response_code(400); echo json_encode(['error' => 'Invalid location filter']); exit;
+    }
+    $locationFilter = $location === 'inbox' ? 'AND a.latitude IS NULL AND a.longitude IS NULL'
+        : ($location === 'map' ? 'AND a.latitude IS NOT NULL AND a.longitude IS NOT NULL' : '');
+    // The inbox includes unplaced stories of all ages unless explicit dates are provided.
+    $startDate = $_GET['start_date'] ?? ($location === 'inbox' ? '1000-01-01' : date('Y-m-d', strtotime('-1 year')));
+    $endDate   = $_GET['end_date'] ?? ($location === 'inbox' ? '9999-12-31' : date('Y-m-d'));
     $endDateFull = $endDate . ' 23:59:59';
 
     // Fetch master articles, now including category_slug
@@ -108,6 +115,7 @@ if ($method === 'GET') {
         FROM articles a
         LEFT JOIN users u ON a.user_id = u.id
         WHERE a.published_at >= :start_date AND a.published_at <= :end_date
+        $locationFilter
         ORDER BY a.published_at DESC
     ");
     $stmt->execute(['start_date' => $startDate, 'end_date' => $endDateFull]);
@@ -156,6 +164,30 @@ $currentUserRole = $_SESSION['user_role'] ?? 'user';
 // ------------------------------------------------------------------
 if ($method === 'POST') {
     $input = json_decode(file_get_contents('php://input'), true);
+    if (!is_array($input)) {
+        http_response_code(400); echo json_encode(['error' => 'Invalid JSON payload']); exit;
+    }
+
+    if (($input['action'] ?? '') === 'place_inbox') {
+        $id = (int)($input['id'] ?? 0);
+        $lat = filter_var($input['latitude'] ?? null, FILTER_VALIDATE_FLOAT);
+        $lng = filter_var($input['longitude'] ?? null, FILTER_VALIDATE_FLOAT);
+        if ($id <= 0 || $lat === false || $lng === false || !is_finite($lat) || !is_finite($lng) || abs($lat) > 90 || abs($lng) > 180) {
+            http_response_code(400); echo json_encode(['error' => 'Invalid coordinates']); exit;
+        }
+        // Any signed-in user can place an unlocated story. The conditional UPDATE
+        // prevents another user's concurrent placement from being overwritten.
+        $stmt = $pdo->prepare('UPDATE articles SET latitude = ?, longitude = ? WHERE id = ? AND latitude IS NULL AND longitude IS NULL');
+        $stmt->execute([$lat, $lng, $id]);
+        if ($stmt->rowCount() !== 1) {
+            $stmt = $pdo->prepare('SELECT id FROM articles WHERE id = ?');
+            $stmt->execute([$id]);
+            $exists = (bool)$stmt->fetch();
+            http_response_code($exists ? 409 : 404);
+            echo json_encode(['error' => $exists ? 'This story has already been placed. Refresh the inbox.' : 'Article not found']); exit;
+        }
+        echo json_encode(['message' => 'Story placed on map', 'id' => $id]); exit;
+    }
 
     if (in_array($input['action'] ?? '', ['add_comment', 'edit_comment'], true)) {
         $body = trim($input['body'] ?? '');
@@ -228,14 +260,23 @@ if ($method === 'POST') {
     }
 
     // --- CASE B: CREATE OR EDIT MASTER PIN ---
-    if (empty($input['title']) || empty($input['url']) || !isset($input['latitude']) || !isset($input['longitude'])) { http_response_code(400); echo json_encode(['error' => 'Missing required fields']); exit; }
+    $addInbox = ($input['action'] ?? '') === 'add_inbox';
+    if (empty($input['title']) || empty($input['url']) || (!$addInbox && (!array_key_exists('latitude', $input) || !array_key_exists('longitude', $input)))) { http_response_code(400); echo json_encode(['error' => 'Missing required fields']); exit; }
     $articleId    = (isset($input['id']) && !empty($input['id'])) ? (int)$input['id'] : null;
+    if ($addInbox && $articleId !== null) { http_response_code(400); echo json_encode(['error' => 'add_inbox creates a new story']); exit; }
     $title        = trim($input['title']);
     $summary      = trim($input['summary'] ?? '');
     $url          = articleUrl($input['url']);
     $imageUrl     = !empty($input['image_url']) ? filter_var($input['image_url'], FILTER_VALIDATE_URL) : null;
-    $latitude     = (float)$input['latitude'];
-    $longitude    = (float)$input['longitude'];
+    $latitude     = $addInbox ? null : $input['latitude'];
+    $longitude    = $addInbox ? null : $input['longitude'];
+    if ($latitude !== null || $longitude !== null) {
+        $latitude = filter_var($latitude, FILTER_VALIDATE_FLOAT);
+        $longitude = filter_var($longitude, FILTER_VALIDATE_FLOAT);
+        if ($latitude === false || $longitude === false || !is_finite($latitude) || !is_finite($longitude) || abs($latitude) > 90 || abs($longitude) > 180) {
+            http_response_code(400); echo json_encode(['error' => 'Provide valid coordinates or leave both coordinates null for the inbox']); exit;
+        }
+    }
     $injuredCount = isset($input['injured_count']) ? max(0, (int)$input['injured_count']) : 0;
     $killedCount  = isset($input['killed_count']) ? max(0, (int)$input['killed_count']) : 0;
     $publishedAt  = !empty($input['published_at']) ? $input['published_at'] : date('Y-m-d H:i:s');

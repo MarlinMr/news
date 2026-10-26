@@ -54,7 +54,7 @@ function transferExport($pdo, $start, $end, $pdfDirectory, $archivePath) {
         $pdo->rollBack();
         throw $e;
     }
-    $data = ['format' => 'geonews', 'version' => 1, 'origin' => $origin,
+    $data = ['format' => 'geonews', 'version' => 2, 'origin' => $origin,
         'exported_at' => date(DATE_ATOM), 'timezone' => 'Europe/Oslo',
         'range' => ['start_date' => $start, 'end_date' => $end],
         'users' => $users, 'articles' => $articles, 'updates' => $updates,
@@ -98,7 +98,7 @@ function transferId($id) {
 }
 
 function transferValidate($data) {
-    if (!is_array($data) || ($data['format'] ?? '') !== 'geonews' || ($data['version'] ?? null) !== 1
+    if (!is_array($data) || ($data['format'] ?? '') !== 'geonews' || !in_array($data['version'] ?? null, [1, 2], true)
         || !is_string($data['origin'] ?? null) || !preg_match('/^[a-f0-9]{32}$/D', $data['origin'])) {
         throw new InvalidArgumentException('Not a supported GeoNews archive.');
     }
@@ -137,8 +137,11 @@ function transferValidate($data) {
             if (!empty($row['image_url']) && !(filter_var($row['image_url'], FILTER_VALIDATE_URL) && in_array(strtolower(parse_url($row['image_url'], PHP_URL_SCHEME) ?? ''), ['http', 'https'], true))) throw new InvalidArgumentException('Invalid image URL.');
             transferText($row, 'emoji', 10);
             transferText($row, 'category_slug', 50);
-            foreach (['latitude' => 90, 'longitude' => 180] as $key => $limit) {
-                if (!isset($row[$key]) || !is_numeric($row[$key]) || !is_finite((float)$row[$key]) || abs((float)$row[$key]) > $limit) throw new InvalidArgumentException('Invalid coordinates.');
+            $unlocated = array_key_exists('latitude', $row) && array_key_exists('longitude', $row) && $row['latitude'] === null && $row['longitude'] === null;
+            if (!$unlocated || $data['version'] === 1) {
+                foreach (['latitude' => 90, 'longitude' => 180] as $key => $limit) {
+                    if (!isset($row[$key]) || !is_numeric($row[$key]) || !is_finite((float)$row[$key]) || abs((float)$row[$key]) > $limit) throw new InvalidArgumentException('Invalid coordinates.');
+                }
             }
             foreach (['injured_count', 'killed_count'] as $key) {
                 if (!isset($row[$key]) || filter_var($row[$key], FILTER_VALIDATE_INT) === false || $row[$key] < 0 || $row[$key] > 2147483647) throw new InvalidArgumentException('Invalid casualty count.');

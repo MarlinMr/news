@@ -71,6 +71,20 @@ try {
     transferExport($source, '2026-10-01', '2026-10-01', $directory . '/source', $archive);
     $overlap = transferImport($destination, $archive, $directory . '/destination');
     transferCheck($overlap['articles'] === 0 && $overlap['updates'] === 1, 'Overlapping imports add new follow-ups');
+
+    $source->exec("INSERT INTO articles (user_id, title, url, latitude, longitude, published_at) VALUES (1, 'Unlocated story', 'https://example.com/inbox', NULL, NULL, '2026-10-01 15:00:00')");
+    transferExport($source, '2026-10-01', '2026-10-01', $directory . '/source', $archive);
+    [$inboxZip, $inboxData] = transferReadArchive($archive); $inboxZip->close();
+    transferCheck($inboxData['version'] === 2, 'Export inbox-capable archive version');
+    $inboxResult = transferImport($destination, $archive, $directory . '/destination');
+    transferCheck($inboxResult['articles'] === 1, 'Import unlocated stories');
+    $inboxRow = $destination->query("SELECT latitude, longitude FROM articles WHERE url = 'https://example.com/inbox'")->fetch();
+    transferCheck($inboxRow && $inboxRow['latitude'] === null && $inboxRow['longitude'] === null, 'Preserve null inbox coordinates');
+    $legacy = $data; $legacy['version'] = 1;
+    transferValidate($legacy);
+    $mixed = $inboxData;
+    $mixed['articles'][count($mixed['articles']) - 1]['longitude'] = 10;
+    transferFails(fn() => transferValidate($mixed), 'Reject incomplete coordinate pairs');
     transferFails(fn() => transferImport($source, $archive, $directory . '/destination'), 'Reject self-import');
     transferFails(fn() => transferExport($source, '2026-10-02', '2026-10-01', $directory . '/source', $archive), 'Reject reversed dates');
     transferFails(fn() => transferExport($source, '2026-02-30', '2026-10-01', $directory . '/source', $archive), 'Reject invalid calendar dates');
