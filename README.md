@@ -54,9 +54,12 @@ For a host directory, mount it at `/pdf` and make it writable by `www-data`
 
 The popup's **Cached article** link opens a local, text-only page containing the
 main article and all its follow-up articles in publication order. Each new entry
-captures the publicly accessible article text when it is saved. The saved title,
-URL, summary, publication date, and text are preserved through subsequent edits
-and metadata refreshes. Deleting an entry also deletes its snapshot.
+captures the publicly accessible article text when it is saved. Captures are
+immutable: later successful cache checks append a new version when the text or
+captured metadata changes. The page shows the latest readable capture by default;
+open **Saved versions** to view the original or any later capture. Each follow-up
+has its own history and version links can be bookmarked. Deleting an entry also
+deletes all of its cached versions.
 
 **Existing installations:** apply `docker/article-cache.sql` to your database
 once before deploying this feature. For a Compose installation:
@@ -65,17 +68,37 @@ once before deploying this feature. For a Compose installation:
 docker compose exec -T db sh -c 'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"' < docker/article-cache.sql
 ```
 
-New databases include the table in `docker/schema.sql`. Older entries have no
-historical snapshot and are labeled accordingly; they are not fetched on page
-views. Failed captures do not prevent saving an article. Captures can be partial,
+**Version-history upgrade:** existing installations that already have the cache
+table must also apply `docker/snapshot-versions.sql` once, on both online and
+offline databases. This retains old captures, removes the one-snapshot-per-article
+restriction, assigns stable version keys, and adds cache-check scheduling fields.
+For example, with Compose:
+
+```sh
+docker compose exec -T db sh -c 'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"' < docker/snapshot-versions.sql
+```
+
+New databases include everything in `docker/schema.sql`. Older entries with no
+historical snapshot are labeled accordingly and can gain their first capture
+through a cache refresh. Page views never fetch publisher content. Authors and
+moderators/admins can use **Refresh cached text** on main articles, follow-ups,
+and inbox entries. This saves a version independently of **Refresh Data**, which
+still updates map metadata through the normal review flow. Cache checks never
+overwrite human-edited map titles, summaries, locations, or existing snapshots.
+
+Failed captures do not prevent initial article saving. Later failed/empty captures
+do not append an empty version or replace readable text. Captures can be partial,
 and sites requiring JavaScript or a subscription may not provide readable text.
-Uploaded PDFs link to the stored PDF instead of extracting its text.
+Uploaded PDFs link to the stored PDF instead of extracting/rechecking its text.
 
 ### Unlocated inbox
 
 Open **Menu → Inbox** to read saved stories which do not yet have coordinates.
 The inbox includes all dates and categories and links to original and cached
-articles. **Any signed-in user** can choose **Place on map**, click a location,
+articles. Unlocated stories also appear in the right-hand chronological feed,
+within the selected date and category filters, with a **No location · Open inbox**
+label. Clicking one opens its inbox entry instead of moving the map.
+**Any signed-in user** can choose **Place on map**, click a location,
 and confirm **Place here**. Anonymous visitors can browse the inbox and sign in
 to place a story. Use Cancel or Escape to exit placement mode. After placement,
 the story leaves the inbox and appears on the map; the map filters expand if
@@ -96,9 +119,10 @@ ALTER TABLE articles
 Both coordinates must be null for an inbox story, or both must contain valid map
 coordinates. No placeholder pins at `(0, 0)` are created. New databases use the
 updated `docker/schema.sql` automatically. Inbox stories and their cached text
-are included in date-range exports. New exports use archive format version 2;
-updated installations can still import version 1 archives. Upgrade the destination
-application and schema before importing version 2 archives.
+are included in date-range exports, along with every saved snapshot version.
+New exports use archive format version 3; updated installations can still import
+version 1 and 2 archives. Upgrade the destination application and schema before
+importing version 3 archives.
 
 For API clients, `POST api/articles.php` with `action: "add_inbox"` and the usual
 title, URL, summary, etc. saves an unlocated story. `GET ?location=inbox` lists
@@ -116,22 +140,28 @@ archive on the same page. No connection to the source server is needed to import
 
 The date range selects **main articles**, including inbox stories, in Europe/Oslo
 time. Every selected incident includes all its follow-ups and comments, including those outside that
-range, plus original cached text snapshots and uploaded PDFs. Remote thumbnails
+range, plus all cached text versions and uploaded PDFs. Remote thumbnails
 are kept as URLs, not downloaded. Source passwords, emails, and roles are excluded;
 authors become separate contributor accounts with random, unknown passwords and
 no administrative privileges. Username collisions receive a source suffix.
 
 Imports merge rather than replace the destination database. Source IDs are
 mapped to new local IDs. Repeated or overlapping imports from the same source
-skip previously imported records, preserving local edits, while adding new
-articles, follow-ups, comments and missing snapshots. This is an additive transfer,
-not synchronization of edits or deletions. Export/import history is stored in
+keep previously imported records and local edits, while adding new articles,
+follow-ups, comments and missing snapshots. If the source now has coordinates
+for a previously imported inbox story, those coordinates are copied **only if
+the destination still has no location**. Existing destination locations are never
+overwritten or cleared. Import results report how many inbox stories were placed.
+Other edits and deletions are not synchronized. Export/import history is stored in
 `data_transfer_origin` and `data_transfer_records`; retain these tables with your
 database. Importing an installation's own archive back into itself is rejected.
 
 **Existing installations:** apply `docker/data-transfer.sql` on both source and
 destination databases. Also apply `docker/article-cache.sql` if not already done.
 Apply `docker/inbox.sql` as well if upgrading an existing installation.
+For existing cache tables, also apply `docker/snapshot-versions.sql`. Repeated
+imports append missing snapshot versions without duplicating existing history,
+including when importing older archives after the version-history migration.
 New databases include all tables in `docker/schema.sql`.
 
 PHP needs the **zip** extension (`ZipArchive`), writable temporary storage, and
@@ -252,9 +282,25 @@ recognizes NRK article IDs even after headline/URL changes. Failed submissions
 are retried on the next poll. Run one reader/state file per destination; this is
 not a server-wide uniqueness constraint across separate machines.
 
+While publishing, the reader also **rechecks recent saved articles and follow-ups**
+for expanding/changing text. By default it checks stories published within the
+last **72 hours**, with each story eligible again after **900 seconds**, and at
+most **20 checks per poll**. This uses the site's database rather than the RSS
+window, so it continues after a story leaves the feed and can continue even when
+an RSS fetch fails. Scheduling persists on the server across watcher restarts.
+Larger queues can take longer than the minimum check interval.
+
+Tune this with `--recheck-hours 72 --recheck-interval 900 --recheck-limit 20`, or
+disable automatic cache checks with `--recheck-hours 0`. Regular contributor
+accounts can recheck only their own saved stories; moderators/admins can recheck
+all recent entries. Rechecks append changed readable captures, leave existing
+article fields alone, and never create another main article or move its pin.
+Each cache-check result is logged to stderr; JSON-lines story output stays on
+stdout. One-shot publishing also performs due cache checks before exiting.
+
 Publishing uses the existing authenticated API, so it needs no database access
-or additional website endpoint. Apply the inbox migration described above before
-using the updated watcher. Normal article saving captures
+or additional website endpoint. Apply the inbox and version-history migrations
+described above before using the updated watcher. Normal article saving captures
 cached text as usual. New stories appear when the map is loaded/refreshed, within
 its selected date/category filters; unlocated stories appear under Menu → Inbox.
 Each story is a separate main article; follow-ups

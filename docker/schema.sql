@@ -52,6 +52,7 @@ CREATE TABLE `articles` (
     `injured_count` INT NOT NULL DEFAULT 0,
     `killed_count` INT NOT NULL DEFAULT 0,
     `published_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `cache_checked_at` DATETIME NULL DEFAULT NULL,
     FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -64,20 +65,26 @@ CREATE TABLE `article_updates` (
     `url` VARCHAR(500) NOT NULL,
     `source_name` VARCHAR(100) DEFAULT NULL,
     `published_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `cache_checked_at` DATETIME NULL DEFAULT NULL,
     FOREIGN KEY (`article_id`) REFERENCES `articles`(`id`) ON DELETE CASCADE,
     FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE article_snapshots (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    article_id INT NULL UNIQUE,
-    update_id INT NULL UNIQUE,
+    article_id INT NULL,
+    update_id INT NULL,
+    version_key CHAR(32) NOT NULL,
     title VARCHAR(255) NOT NULL,
     url VARCHAR(500) NOT NULL,
     summary TEXT NOT NULL,
     published_at DATETIME NOT NULL,
     article_text MEDIUMTEXT NOT NULL,
     captured_at DATETIME NOT NULL,
+    UNIQUE KEY article_snapshot_version (article_id, version_key),
+    UNIQUE KEY update_snapshot_version (update_id, version_key),
+    INDEX article_version_order (article_id, captured_at, id),
+    INDEX update_version_order (update_id, captured_at, id),
     FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE,
     FOREIGN KEY (update_id) REFERENCES article_updates(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
