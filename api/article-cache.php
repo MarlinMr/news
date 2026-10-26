@@ -1,5 +1,6 @@
 <?php
-// Snapshots are written only on insertion, never by metadata refreshes or edits.
+require_once __DIR__ . '/metadata.php';
+// Every capture is immutable. Later successful checks may append a new version.
 function extractCachedArticleText($html) {
     $dom = new DOMDocument();
     @$dom->loadHTML('<?xml encoding="UTF-8">' . $html);
@@ -21,7 +22,7 @@ function extractCachedArticleText($html) {
     return $blocks ? implode("\n\n", $blocks) : trim($root->textContent);
 }
 
-function fetchCachedArticleText($url) {
+function fetchCachedArticleDocument($url) {
     for ($redirect = 0; $redirect <= 3; $redirect++) {
         $parts = parse_url($url);
         if (!$parts || !filter_var($url, FILTER_VALIDATE_URL) || !in_array(strtolower($parts['scheme'] ?? ''), ['http', 'https'], true)
@@ -73,23 +74,87 @@ function fetchCachedArticleText($url) {
         foreach ($headers as $header) {
             if (stripos($header, 'Content-Type:') === 0 && !preg_match('#(?:text/html|application/xhtml\+xml)#i', $header)) return '';
         }
-        return extractCachedArticleText($html);
+        return $html;
     }
     return '';
 }
 
+function fetchCachedArticleText($url) {
+    $html = fetchCachedArticleDocument($url);
+    return $html === '' ? '' : extractCachedArticleText($html);
+}
+
 function captureArticleSnapshot($url) {
     $text = '';
+    $metadata = [];
     try {
-        if (!preg_match('#^/?pdf/#', $url)) $text = fetchCachedArticleText($url);
+        if (!preg_match('#^/?pdf/#', $url)) {
+            $html = fetchCachedArticleDocument($url);
+            if ($html !== '') {
+                $text = extractCachedArticleText($html);
+                $metadata = parseArticleMetadata($html);
+            }
+        }
     } catch (Throwable $e) {
         error_log('Article text capture failed: ' . $e->getMessage());
     }
-    return ['text' => $text, 'captured_at' => date('Y-m-d H:i:s')];
+    return ['text' => $text, 'captured_at' => date('Y-m-d H:i:s'), 'metadata' => $metadata];
 }
 
 function saveArticleSnapshot($pdo, $type, $id, $title, $url, $summary, $publishedAt, $snapshot) {
-    $stmt = $pdo->prepare('INSERT INTO article_snapshots (article_id, update_id, title, url, summary, published_at, article_text, captured_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
-    $stmt->execute([$type === 'article' ? $id : null, $type === 'update' ? $id : null,
+    $versionKey = bin2hex(random_bytes(16));
+    $stmt = $pdo->prepare('INSERT INTO article_snapshots (article_id, update_id, version_key, title, url, summary, published_at, article_text, captured_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    $stmt->execute([$type === 'article' ? $id : null, $type === 'update' ? $id : null, $versionKey,
         $title, $url, $summary, $publishedAt, $snapshot['text'], $snapshot['captured_at']]);
+    $table = $type === 'article' ? 'articles' : 'article_updates';
+    $stmt = $pdo->prepare("UPDATE $table SET cache_checked_at = ? WHERE id = ?");
+    $stmt->execute([$snapshot['captured_at'], $id]);
+    return $versionKey;
+}
+
+function refreshArticleSnapshot($pdo, $type, $id, $capture = null) {
+    if (!in_array($type, ['article', 'update'], true)) throw new InvalidArgumentException('Invalid article type');
+    $table = $type === 'article' ? 'articles' : 'article_updates';
+    $column = $type === 'article' ? 'article_id' : 'update_id';
+    $stmt = $pdo->prepare("SELECT * FROM $table WHERE id = ?");
+    $stmt->execute([$id]);
+    $source = $stmt->fetch();
+    if (!$source) return ['status' => 'not_found'];
+    if (preg_match('#^/?pdf/#', $source['url'])) return ['status' => 'pdf'];
+    // Fetch outside the transaction; lock the parent only while comparing/writing.
+    $snapshot = ($capture ?? 'captureArticleSnapshot')($source['url']);
+    $pdo->beginTransaction();
+    try {
+        $stmt = $pdo->prepare("SELECT * FROM $table WHERE id = ? FOR UPDATE");
+        $stmt->execute([$id]);
+        $current = $stmt->fetch();
+        if (!$current) { $pdo->rollBack(); return ['status' => 'not_found']; }
+        if ($current['url'] !== $source['url']) { $pdo->rollBack(); return ['status' => 'source_changed']; }
+        $stmt = $pdo->prepare("UPDATE $table SET cache_checked_at = ? WHERE id = ?");
+        $stmt->execute([$snapshot['captured_at'], $id]);
+        if (trim($snapshot['text']) === '') {
+            $pdo->commit();
+            return ['status' => 'unavailable'];
+        }
+        $stmt = $pdo->prepare("SELECT * FROM article_snapshots WHERE $column = ? ORDER BY captured_at DESC, id DESC LIMIT 1 FOR UPDATE");
+        $stmt->execute([$id]);
+        $previous = $stmt->fetch();
+        $metadata = $snapshot['metadata'] ?? [];
+        $title = !empty($metadata['title']) ? mb_substr($metadata['title'], 0, 255) : ($previous['title'] ?? $current['title']);
+        $summary = !empty($metadata['description']) ? $metadata['description'] : ($previous['summary'] ?? $current['summary'] ?? '');
+        $publishedAt = $previous['published_at'] ?? $current['published_at'];
+        if (!empty($metadata['published_at'])) $publishedAt = (new DateTimeImmutable($metadata['published_at']))->setTimezone(new DateTimeZone('Europe/Oslo'))->format('Y-m-d H:i:s');
+        $unchanged = $previous && $previous['article_text'] === $snapshot['text'] && $previous['title'] === $title
+            && $previous['url'] === $source['url'] && $previous['summary'] === $summary && $previous['published_at'] === $publishedAt;
+        if ($unchanged) {
+            $pdo->commit();
+            return ['status' => 'unchanged', 'version_key' => $previous['version_key']];
+        }
+        $key = saveArticleSnapshot($pdo, $type, $id, $title, $source['url'], $summary, $publishedAt, $snapshot);
+        $pdo->commit();
+        return ['status' => 'saved', 'version_key' => $key];
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        throw $e;
+    }
 }

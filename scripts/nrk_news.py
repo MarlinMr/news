@@ -205,6 +205,25 @@ class Publisher:
             print(f"Saved to inbox: {story['title']} [GeoNews #{result['id']}]", file=sys.stderr, flush=True)
         return result["id"]
 
+    def recheck_recent(self, options):
+        if options.recheck_hours == 0:
+            return True
+        query = urllib.parse.urlencode({"action": "cache_candidates", "hours": options.recheck_hours,
+                                        "interval": options.recheck_interval, "limit": options.recheck_limit})
+        response = self.api("articles.php?" + query)
+        if not isinstance(response, dict) or not isinstance(response.get("candidates"), list):
+            raise RuntimeError("The site does not support cache rechecks yet. Update the website and apply snapshot-versions.sql, or use --recheck-hours 0 temporarily.")
+        candidates = response["candidates"]
+        success = True
+        for candidate in candidates:
+            try:
+                result = self.api("articles.php", {"action": "refresh_cache", "id": candidate["id"], "type": candidate["type"]})
+                print(f"Cache recheck {candidate['type']} #{candidate['id']}: {result['status']}", file=sys.stderr, flush=True)
+            except (RuntimeError, ValueError, OSError, KeyError) as error:
+                success = False
+                print(f"Cache recheck failed for {candidate['type']} #{candidate['id']}: {error}", file=sys.stderr, flush=True)
+        return success
+
 
 def open_state(path):
     path = Path(path).expanduser()
@@ -266,9 +285,14 @@ def main(argv=None):
     parser.add_argument("--geocode", action="store_true", help="Try GeoNews/Nominatim locations; save unlocated stories to the inbox")
     parser.add_argument("--geocoder", default=os.environ.get("NOMINATIM_URL", "https://nominatim.openstreetmap.org"))
     parser.add_argument("--category", help="Override the GeoNews category slug (default: general, or metadata guess with --geocode)")
+    parser.add_argument("--recheck-hours", type=int, default=72, help="Recheck saved stories published within this many hours, even after leaving RSS (default: 72; 0 disables)")
+    parser.add_argument("--recheck-interval", type=int, default=900, help="Minimum seconds between cache checks per story (default: 900)")
+    parser.add_argument("--recheck-limit", type=int, default=20, help="Maximum cached articles/follow-ups to recheck per poll (default: 20)")
     options = parser.parse_args(argv)
     if options.limit < 1 or options.interval < 60:
         parser.error("--limit must be positive and --interval must be at least 60 seconds")
+    if not 0 <= options.recheck_hours <= 720 or not 60 <= options.recheck_interval <= 86400 or not 1 <= options.recheck_limit <= 100:
+        parser.error("Recheck hours must be 0–720, interval 60–86400 seconds, and limit 1–100")
     try:
         http_url(options.feed)
         if options.site:
@@ -297,10 +321,17 @@ def main(argv=None):
             try:
                 if publisher:
                     publisher.login()  # Refresh the session each poll; no database connection needed.
-                success = process(feed.fetch(), options, publisher, db)
+                try:
+                    success = process(feed.fetch(), options, publisher, db)
+                except (RuntimeError, ValueError, OSError, ET.ParseError, sqlite3.Error) as error:
+                    success = False
+                    print(f"NRK feed: {error}", file=sys.stderr, flush=True)
+                # Database-backed scheduling also covers stories no longer present in RSS.
+                if publisher:
+                    success = publisher.recheck_recent(options) and success
                 if not options.watch:
                     return 0 if success else 1
-            except (RuntimeError, ValueError, OSError, ET.ParseError, sqlite3.Error) as error:
+            except (RuntimeError, ValueError, OSError, ET.ParseError, sqlite3.Error, KeyError) as error:
                 print(f"NRK reader: {error}", file=sys.stderr, flush=True)
                 if not options.watch:
                     return 1

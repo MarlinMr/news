@@ -98,6 +98,27 @@ $categoryEmojiMap = [
 // 6. GET: FETCH ARTICLES (WITH TIMELINE UPDATES)
 // ------------------------------------------------------------------
 if ($method === 'GET') {
+    if (($_GET['action'] ?? '') === 'cache_candidates') {
+        if (!isset($_SESSION['user_id'])) { http_response_code(401); echo json_encode(['error' => 'Please sign in first']); exit; }
+        $hours = filter_var($_GET['hours'] ?? 72, FILTER_VALIDATE_INT);
+        $interval = filter_var($_GET['interval'] ?? 900, FILTER_VALIDATE_INT);
+        $limit = filter_var($_GET['limit'] ?? 20, FILTER_VALIDATE_INT);
+        if ($hours === false || $hours < 1 || $hours > 720 || $interval === false || $interval < 60 || $interval > 86400 || $limit === false || $limit < 1 || $limit > 100) {
+            http_response_code(400); echo json_encode(['error' => 'Invalid cache recheck limits']); exit;
+        }
+        $canCheckAll = in_array($_SESSION['user_role'] ?? 'user', ['admin', 'moderator'], true);
+        $ownerFilter = $canCheckAll ? '' : 'AND user_id = ?';
+        $params = [date('Y-m-d H:i:s', time() - $hours * 3600), date('Y-m-d H:i:s'), date('Y-m-d H:i:s', time() - $interval)];
+        if (!$canCheckAll) $params[] = $_SESSION['user_id'];
+        $where = "published_at >= ? AND published_at <= ? AND (cache_checked_at IS NULL OR cache_checked_at <= ?) AND url REGEXP '^https?://' $ownerFilter";
+        $stmt = $pdo->prepare("SELECT * FROM (
+            SELECT id, 'article' AS type, title, published_at, cache_checked_at FROM articles WHERE $where
+            UNION ALL
+            SELECT id, 'update' AS type, title, published_at, cache_checked_at FROM article_updates WHERE $where
+        ) candidates ORDER BY cache_checked_at ASC, published_at DESC, type, id LIMIT $limit");
+        $stmt->execute(array_merge($params, $params));
+        echo json_encode(['candidates' => $stmt->fetchAll()], JSON_UNESCAPED_UNICODE); exit;
+    }
     $location = $_GET['location'] ?? 'map';
     if (!in_array($location, ['map', 'inbox', 'all'], true)) {
         http_response_code(400); echo json_encode(['error' => 'Invalid location filter']); exit;
@@ -166,6 +187,24 @@ if ($method === 'POST') {
     $input = json_decode(file_get_contents('php://input'), true);
     if (!is_array($input)) {
         http_response_code(400); echo json_encode(['error' => 'Invalid JSON payload']); exit;
+    }
+
+    if (($input['action'] ?? '') === 'refresh_cache') {
+        $type = $input['type'] ?? 'article';
+        $id = (int)($input['id'] ?? 0);
+        if (!in_array($type, ['article', 'update'], true) || $id <= 0) { http_response_code(400); echo json_encode(['error' => 'Invalid article type or ID']); exit; }
+        $table = $type === 'article' ? 'articles' : 'article_updates';
+        $stmt = $pdo->prepare("SELECT user_id FROM $table WHERE id = ?");
+        $stmt->execute([$id]); $row = $stmt->fetch();
+        if (!$row) { http_response_code(404); echo json_encode(['error' => 'Article not found']); exit; }
+        if ($row['user_id'] != $currentUserId && !in_array($currentUserRole, ['admin', 'moderator'], true)) { http_response_code(403); echo json_encode(['error' => 'Only the author or a moderator/admin can refresh cached text']); exit; }
+        session_write_close();
+        $result = refreshArticleSnapshot($pdo, $type, $id);
+        if ($result['status'] === 'not_found' || $result['status'] === 'source_changed') {
+            http_response_code($result['status'] === 'not_found' ? 404 : 409);
+            echo json_encode(['error' => 'The article was deleted or its URL changed. Reload and try again.']); exit;
+        }
+        echo json_encode($result); exit;
     }
 
     if (($input['action'] ?? '') === 'place_inbox') {

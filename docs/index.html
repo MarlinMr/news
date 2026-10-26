@@ -26,6 +26,7 @@
         <li><a href="#inbox">Place inbox stories</a></li>
         <li><a href="#markers">Categories and markers</a></li>
         <li><a href="#refresh">Edit and refresh data</a></li>
+        <li><a href="#cached">Cached article versions</a></li>
         <li><a href="#timeline">Timeline articles</a></li>
         <li><a href="#move">Move a pin</a></li>
         <li><a href="#bulk">Admin bulk refresh</a></li>
@@ -51,7 +52,7 @@
         <p>Use a link to the actual news article rather than a news site's homepage: refresh reads information from the saved URL.</p>
     </section>
     <section id="inbox"><h2>Place an inbox story on the map</h2>
-        <p>Stories in <strong>Menu → Inbox</strong> are already saved, including their available cached text, but do not have a location yet. The inbox includes all dates and categories.</p>
+        <p>Stories in <strong>Menu → Inbox</strong> are already saved, including their available cached text, but do not have a location yet. The inbox includes all dates and categories. Unlocated stories also appear in the right-hand chronological feed when they match its filters, labeled <strong>No location · Open inbox</strong>. Click one to open its inbox entry.</p>
         <ol>
             <li>Sign in with any user account, then open <strong>Menu → Inbox</strong>.</li>
             <li>Search for a story and read its summary, original article, or cached article.</li>
@@ -78,6 +79,11 @@
             <li>Click <strong>Add Update</strong>. It appears in that incident's event timeline.</li>
         </ol>
         <p>Follow-up articles have their own URL, headline and publication time. They share the incident's pin; categories and marker emojis belong to the master incident.</p>
+    </section>
+    <section id="cached"><h2>Cached article versions</h2>
+        <p><strong>Cached article</strong> opens the saved text of an incident and its follow-ups. The latest readable capture is shown by default. Open <strong>Saved versions</strong> to read the original capture or later versions; each follow-up has its own history.</p>
+        <p>If an article grows after publication, its author or a moderator/admin can choose <strong>Refresh cached text</strong> on the article card, follow-up, or inbox entry. Changed readable text creates a new version, while earlier captures stay intact. Failed captures keep the previous text. These checks do not overwrite map metadata or locations.</p>
+        <p>The external news watcher can periodically check recent saved stories, including ones no longer in the RSS feed. Cached page views themselves do not contact publishers. Offline exports include all saved versions.</p>
     </section>
     <section id="move"><h2>Move a pin</h2>
         <p>If you can edit an incident, drag its pin to a new location. A confirmation shows the old and new coordinates. Confirm to save, or cancel to restore the original position. A failed save also restores the original position.</p>

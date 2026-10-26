@@ -29,7 +29,7 @@
     <div id="workspace" hidden>
         <section>
             <h2>Export a time range</h2>
-            <p>Select main articles by publication date, inclusive, in Europe/Oslo time, including unlocated inbox stories. Each selected incident includes all its follow-ups, comments, cached text, and uploaded PDFs, even if a follow-up falls outside the date range.</p>
+            <p>Select main articles by publication date, inclusive, in Europe/Oslo time, including unlocated inbox stories. Each selected incident includes all its follow-ups, comments, cached text versions, and uploaded PDFs, even if a follow-up falls outside the date range.</p>
             <form id="exportForm">
                 <div class="fields">
                     <label>From <input id="startDate" type="date" required></label>
@@ -42,6 +42,8 @@
         <section>
             <h2>Import an archive</h2>
             <p>Upload the exported ZIP on the destination installation. Records are added with new local IDs. Reimporting from the same source adds new records and keeps previously imported records and local edits. Existing destination data is preserved.</p>
+            <p>If a previously imported inbox story now has coordinates at the source, its destination copy is placed on the map only if it still has no location. Existing destination locations are preserved.</p>
+            <p>New cached versions are added to previously imported stories without replacing earlier versions. Repeated imports preserve the history without duplicating captures.</p>
             <p>Authors are preserved as separate contributor accounts with no source passwords, email addresses, or admin roles. Sign in using the destination’s own admin account.</p>
             <form id="importForm">
                 <div class="fields"><label>GeoNews archive (maximum 128 MB) <input id="archive" type="file" accept=".zip,application/zip" required></label></div>
@@ -93,7 +95,7 @@
         try {
             const response = await checkResponse(await fetch('api/data-transfer.php?action=import', {method: 'POST', headers: {'X-Transfer-Token': token}, body}));
             const {counts: c} = await response.json();
-            status('importStatus', `Imported ${c.articles} articles, ${c.updates} follow-ups, ${c.comments} comments, ${c.snapshots} snapshots, and ${c.pdfs} PDFs. ${c.skipped} previously imported records kept. Open the map to browse them.`);
+            status('importStatus', `Imported ${c.articles} articles, ${c.updates} follow-ups, ${c.comments} comments, ${c.snapshots} cached versions, and ${c.pdfs} PDFs. ${c.located || 0} inbox stories placed from source coordinates. ${c.skipped} previously imported records kept. Open the map to browse them.`);
         } catch (error) { status('importStatus', error.message, true); }
         finally { busy(false); }
     };

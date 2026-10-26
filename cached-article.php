@@ -1,6 +1,7 @@
 <?php
 date_default_timezone_set('Europe/Oslo');
 header('Content-Type: text/html; charset=utf-8');
+header('Cache-Control: no-store');
 header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'");
 header('X-Content-Type-Options: nosniff');
 require_once __DIR__ . '/api/db.php';
@@ -14,6 +15,17 @@ function cacheSourceUrl($url) {
     return '';
 }
 function renderCachedText($row) {
+    if ($row['versions']) {
+        echo '<details class="versions"><summary>Saved versions (' . count($row['versions']) . ')</summary><ol>';
+        foreach ($row['versions'] as $index => $version) {
+            $number = count($row['versions']) - $index;
+            $label = 'Version ' . $number . ($number === 1 ? ' · Original capture' : '') . ' · ' . $version['captured_at'] . ' (Europe/Oslo)';
+            if ($version['version_key'] === $row['latest_version_key']) $label .= $version['has_text'] ? ' · Latest readable capture' : ' · Latest saved capture';
+            if ($version['version_key'] === $row['version_key']) $label .= ' · Showing';
+            echo '<li><a href="' . cacheEscape(cacheVersionUrl($row['cache_target'], $version['version_key'])) . '">' . cacheEscape($label) . '</a></li>';
+        }
+        echo '</ol><p><a href="' . cacheEscape(cacheVersionUrl($row['cache_target'], null)) . '">Show latest capture</a></p></details>';
+    }
     if ($row['captured_at']) {
         echo '<p class="meta">Snapshot captured ' . cacheEscape($row['captured_at']) . ' (Europe/Oslo).</p>';
     }
@@ -21,22 +33,70 @@ function renderCachedText($row) {
         echo '<div class="article-text">' . cacheEscape($row['article_text']) . '</div>';
     } else {
         echo '<p class="notice">' . ($row['captured_at']
-            ? 'Article text could not be captured when this entry was saved. The source may require JavaScript, a subscription, or block automated access. PDF uploads remain available through the original link.'
+            ? 'Article text could not be captured in this version. The source may require JavaScript, a subscription, or block automated access. PDF uploads remain available through the original link.'
             : 'No snapshot is available. This entry predates article text caching.') . '</p>';
         if (!empty($row['summary'])) echo '<h3>Saved summary</h3><div class="article-text">' . cacheEscape($row['summary']) . '</div>';
     }
 }
+function cacheVersionUrl($target, $versionKey) {
+    global $id, $cacheSelections;
+    $selections = $cacheSelections;
+    if ($versionKey === null) unset($selections[$target]);
+    else $selections[$target] = $versionKey;
+    return 'cached-article.php?' . http_build_query(['id' => $id, 'versions' => $selections], '', '&', PHP_QUERY_RFC3986)
+        . '#' . ($target === 'article' ? 'main-article' : $target);
+}
+function selectCachedVersion($row, $versions, $target) {
+    global $cacheSelections, $pdo;
+    $row['cache_target'] = $target;
+    $row['versions'] = $versions;
+    $row['article_text'] = ''; $row['captured_at'] = null; $row['version_key'] = null; $row['latest_version_key'] = null;
+    if (!$versions) return $row;
+    $latest = $versions[0];
+    foreach ($versions as $version) {
+        if ($version['has_text']) { $latest = $version; break; }
+    }
+    $row['latest_version_key'] = $latest['version_key'];
+    $selected = $latest;
+    foreach ($versions as $version) {
+        if (($cacheSelections[$target] ?? '') === $version['version_key']) { $selected = $version; break; }
+    }
+    foreach (['title', 'url', 'summary', 'published_at', 'captured_at', 'version_key'] as $field) $row[$field] = $selected[$field];
+    // Load only the displayed body, not every full-text version in the history.
+    $stmt = $pdo->prepare('SELECT article_text FROM article_snapshots WHERE id = ?');
+    $stmt->execute([$selected['id']]);
+    $row['article_text'] = (string)$stmt->fetchColumn();
+    return $row;
+}
 $id = filter_var($_GET['id'] ?? '', FILTER_VALIDATE_INT);
+$cacheSelections = [];
+foreach (is_array($_GET['versions'] ?? null) ? $_GET['versions'] : [] as $target => $key) {
+    if (preg_match('/^(article|update-\d+)$/D', (string)$target) && is_string($key) && preg_match('/^[a-f0-9]{32}$/D', $key)) $cacheSelections[$target] = $key;
+}
 $article = false;
 $updates = [];
 if ($id && $id > 0) {
-    $stmt = $pdo->prepare('SELECT a.id, COALESCE(s.title, a.title) AS title, COALESCE(s.url, a.url) AS url, COALESCE(s.summary, a.summary) AS summary, COALESCE(s.published_at, a.published_at) AS published_at, s.article_text, s.captured_at FROM articles a LEFT JOIN article_snapshots s ON s.article_id = a.id WHERE a.id = ?');
+    $stmt = $pdo->prepare('SELECT id, title, url, summary, published_at FROM articles WHERE id = ?');
     $stmt->execute([$id]);
     $article = $stmt->fetch();
     if ($article) {
-        $stmt = $pdo->prepare('SELECT au.id, au.source_name, COALESCE(s.title, au.title) AS title, COALESCE(s.url, au.url) AS url, COALESCE(s.published_at, au.published_at) AS published_at, s.summary, s.article_text, s.captured_at FROM article_updates au LEFT JOIN article_snapshots s ON s.update_id = au.id WHERE au.article_id = ? ORDER BY published_at ASC, au.id ASC');
+        $stmt = $pdo->prepare("SELECT id, source_name, title, url, '' AS summary, published_at FROM article_updates WHERE article_id = ? ORDER BY published_at ASC, id ASC");
         $stmt->execute([$id]);
         $updates = $stmt->fetchAll();
+        $stmt = $pdo->prepare('SELECT s.id, s.article_id, s.update_id, s.version_key, s.title, s.url, s.summary, s.published_at, s.captured_at, LENGTH(s.article_text) > 0 AS has_text FROM article_snapshots s LEFT JOIN article_updates au ON au.id = s.update_id WHERE s.article_id = ? OR au.article_id = ? ORDER BY s.captured_at DESC, s.id DESC');
+        $stmt->execute([$id, $id]);
+        $versions = [];
+        foreach ($stmt->fetchAll() as $version) {
+            $target = $version['article_id'] !== null ? 'article' : 'update-' . $version['update_id'];
+            $versions[$target][] = $version;
+        }
+        $article = selectCachedVersion($article, $versions['article'] ?? [], 'article');
+        foreach ($updates as &$update) {
+            $target = 'update-' . $update['id'];
+            $update = selectCachedVersion($update, $versions[$target] ?? [], $target);
+        }
+        unset($update);
+        usort($updates, fn($a, $b) => strcmp($a['published_at'], $b['published_at']) ?: $a['id'] <=> $b['id']);
     }
 }
 if (!$article) http_response_code(404);
@@ -57,6 +117,8 @@ if (!$article) http_response_code(404);
         .meta { color: #64748b; font-size: .9rem; }
         .article-text { white-space: pre-wrap; overflow-wrap: anywhere; }
         .notice { background: #f8fafc; border-left: 3px solid #94a3b8; padding: 12px; }
+        .versions { background: #f8fafc; padding: 12px; margin: 16px 0; font-size: .9rem; border-radius: 6px; }
+        .versions summary { cursor: pointer; font-weight: 600; }
         li { margin-bottom: 8px; }
         :target { outline: 2px solid #0284c7; outline-offset: 4px; }
         @media (max-width: 600px) { article, section { padding: 18px; } }
@@ -69,7 +131,7 @@ if (!$article) http_response_code(404);
         <h1>Article not found</h1>
         <p>This article may have been deleted, or the link is invalid.</p>
     <?php else: ?>
-        <p class="meta">Cached article · Text saved when each entry was added. Publisher changes are not reflected here. Captures may be partial.</p>
+        <p class="meta">Cached article · Showing the latest saved readable capture by default. Open Saved versions to read earlier captures. This page does not fetch live publisher content; captures may be partial.</p>
         <article id="main-article">
             <h1><?= cacheEscape($article['title']) ?></h1>
             <p class="meta">Published <?= cacheEscape($article['published_at']) ?> (Europe/Oslo)</p>

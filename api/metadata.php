@@ -94,7 +94,7 @@ function extractCasualties($text) {
     $wordMap = ['en'=>1, 'én'=>1, 'ett'=>1, 'one'=>1, 'to'=>2, 'two'=>2, 'tre'=>3, 'three'=>3, 'fire'=>4, 'four'=>4, 'fem'=>5, 'five'=>5, 'seks'=>6, 'six'=>6, 'sju'=>7, 'syv'=>7, 'seven'=>7, 'åtte'=>8, 'eight'=>8, 'ni'=>9, 'nine' =>9, 'ti'=>10, 'ten'=>10];
     $wordRegex = implode('|', array_keys($wordMap));
 
-    if (preg_match('/\b(\d+|' . $wordRegex . ')\s*(?:personer|personar|passasjerer)?\s*(?:(?:er|ble|blei|are|were)\s+)?(?:skadd(?:e|ede)?|injured|wounded)\b/iu', $text, $m)) {
+    if (preg_match('/\b(\d+|' . $wordRegex . ')\s*(?:person(?:er|ar)?|passasjer(?:er)?)?\s*(?:(?:er|ble|blei|are|were)\s+)?(?:skadd(?:e|ede)?|såret|sårede|såra|injured|wounded)\b/iu', $text, $m)) {
         $val = mb_strtolower($m[1]);
         $injured = is_numeric($val) ? (int)$val : ($wordMap[$val] ?? null);
     }

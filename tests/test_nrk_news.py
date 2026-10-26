@@ -30,6 +30,8 @@ class NRKNewsTests(unittest.TestCase):
         self.reject_post = False
         self.uncertain_post = False
         self.requests = []
+        self.candidates = []
+        self.refresh_status = 'saved'
         test = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -53,6 +55,8 @@ class NRKNewsTests(unittest.TestCase):
                         self.send_header("ETag", '"v1"')
                         self.end_headers()
                         self.wfile.write(RSS)
+                elif self.path.startswith("/news/api/articles.php?action=cache_candidates"):
+                    self.send_json({'candidates': test.candidates})
                 elif self.path.startswith("/news/api/articles.php"):
                     self.send_json(test.articles)
                 elif self.path.startswith("/news/api/parse_og.php"):
@@ -73,6 +77,8 @@ class NRKNewsTests(unittest.TestCase):
                     return
                 if self.headers.get("Cookie") != "PHPSESSID=test-session":
                     self.send_json({"error": "Please log in"}, 401)
+                elif payload.get('action') == 'refresh_cache':
+                    self.send_json({'status': test.refresh_status, 'version_key': 'a' * 32})
                 elif test.reject_post:
                     self.send_json({"error": "Temporary failure"}, 503)
                 else:
@@ -93,7 +99,8 @@ class NRKNewsTests(unittest.TestCase):
         self.db = nrk.open_state(Path(self.directory.name) / "state.sqlite3")
         self.options = SimpleNamespace(feed=self.base + "/feed", limit=20, json=False,
                                        latitude=59.9, longitude=10.7, geocode=False,
-                                       geocoder=self.base, category=None)
+                                       geocoder=self.base, category=None,
+                                       recheck_hours=72, recheck_interval=900, recheck_limit=20)
         self.output = contextlib.ExitStack()
         self.output.enter_context(contextlib.redirect_stdout(io.StringIO()))
         self.output.enter_context(contextlib.redirect_stderr(io.StringIO()))
@@ -209,6 +216,38 @@ class NRKNewsTests(unittest.TestCase):
         nrk.process(stories, self.options, db=self.db)
         nrk.process(stories, self.options, self.publisher, self.db)
         self.assertEqual(len(self.articles), 2)
+
+    def test_rechecks_saved_stories_absent_from_feed(self):
+        self.candidates = [{'id': 999, 'type': 'article'}, {'id': 998, 'type': 'update'}]
+        self.assertTrue(self.publisher.recheck_recent(self.options))
+        self.assertIn('hours=72', self.requests[-1][0])
+        self.assertIn('interval=900', self.requests[-1][0])
+        refreshes = [payload for path, payload in self.posts if payload.get('action') == 'refresh_cache']
+        self.assertEqual(refreshes, [{'action': 'refresh_cache', 'id': 999, 'type': 'article'}, {'action': 'refresh_cache', 'id': 998, 'type': 'update'}])
+        self.assertEqual(self.articles, [])
+
+    def test_rechecks_can_be_disabled(self):
+        self.options.recheck_hours = 0
+        self.assertTrue(self.publisher.recheck_recent(self.options))
+        self.assertEqual(self.requests, [])
+
+    def test_older_server_reports_missing_recheck_support(self):
+        with patch.object(self.publisher, 'api', return_value=[]):
+            with self.assertRaisesRegex(RuntimeError, 'does not support cache rechecks'):
+                self.publisher.recheck_recent(self.options)
+
+    def test_unavailable_recheck_does_not_create_an_article(self):
+        self.candidates = [{'id': 999, 'type': 'article'}]
+        self.refresh_status = 'unavailable'
+        self.assertTrue(self.publisher.recheck_recent(self.options))
+        self.assertEqual(self.articles, [])
+
+    def test_main_rechecks_even_if_feed_fails(self):
+        environment = {'GEONEWS_USERNAME': 'reader', 'GEONEWS_PASSWORD': 'test-password'}
+        with patch.dict('os.environ', environment), patch.object(nrk.Feed, 'fetch', side_effect=RuntimeError('Feed unavailable')), patch.object(nrk.Publisher, 'recheck_recent', return_value=True) as recheck:
+            status = nrk.main(['--site', self.base + '/news/', '--state', str(Path(self.directory.name) / 'main.sqlite3')])
+        self.assertEqual(status, 1)
+        recheck.assert_called_once()
 
 
 if __name__ == "__main__":

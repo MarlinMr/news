@@ -236,6 +236,7 @@
             transition: background 0.15s ease, border-color 0.15s ease;
         }
         .feed-item:hover { background: #1e293b; border-color: #3b82f6; }
+        .feed-inbox-badge { display: inline-block; margin-top: 6px; color: #fbbf24; font-size: 11px; }
 
         .feed-item-header {
             display: flex;
@@ -732,7 +733,8 @@
             </select>
 
             <div class="preset-group">
-                <button type="button" class="btn-preset active" onclick="applyPreset(7, event)">7D</button>
+                <button type="button" class="btn-preset active" onclick="applyPreset(1, event)">1D</button>
+                <button type="button" class="btn-preset" onclick="applyPreset(7, event)">7D</button>
                 <button type="button" class="btn-preset" onclick="applyPreset(30, event)">1M</button>
                 <button type="button" class="btn-preset" onclick="applyPreset(180, event)">6M</button>
                 <button type="button" class="btn-preset" onclick="applyPreset(365, event)">1Y</button>
@@ -1112,6 +1114,7 @@
         let inboxPlacementCoordinates = null;
         let inboxPlacementSaving = false;
         let markersMap = {};
+        let pendingIncidentFocus = null;
         let initialTargetId = null;
         let detectedCoords = null;
 
@@ -1444,6 +1447,9 @@
                 }
                 const cached = document.createElement('a'); cached.href = `cached-article.php?id=${item.id}`; cached.textContent = 'Cached article'; cached.target = '_blank'; cached.rel = 'noopener'; links.append(cached);
                 const place = document.createElement('button'); place.type = 'button'; place.className = 'btn-submit'; place.textContent = currentUser ? 'Place on map' : 'Sign in to place'; place.onclick = () => startInboxPlacement(item.id); links.append(place);
+                if (currentUser && (currentUser.id == item.user_id || ['admin', 'moderator'].includes(currentUser.role))) {
+                    const refresh = document.createElement('button'); refresh.type = 'button'; refresh.className = 'btn-action'; refresh.textContent = 'Refresh cached text'; refresh.onclick = () => refreshCachedText(item.id, 'article', refresh); links.append(refresh);
+                }
                 card.append(title, meta, summary, links); list.append(card);
             });
         }
@@ -1898,6 +1904,28 @@
             return String(value || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         }
 
+        async function refreshCachedText(id, type = 'article', button = null) {
+            if (!currentUser) { openAuthModal(); return; }
+            const label = button?.textContent;
+            if (button) { button.disabled = true; button.textContent = 'Checking cached text…'; }
+            try {
+                const response = await fetch('api/articles.php', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'refresh_cache', id, type })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Could not refresh cached text.');
+                const messages = {
+                    saved: 'A new cached version was saved. Earlier versions are preserved.',
+                    unchanged: 'The cached article is unchanged.',
+                    unavailable: 'No readable article text was returned. Existing cached versions were kept.',
+                    pdf: 'Uploaded PDFs are already stored locally and do not need text refreshes.'
+                };
+                alert(messages[data.status] || 'Cache check complete.');
+            } catch (error) { alert(error.message); }
+            finally { if (button) { button.disabled = false; button.textContent = label; } }
+        }
+
         function openCommentModal(articleId, commentId = '') {
             if (!currentUser) { openAuthModal(); return; }
             const article = articlesData.find(a => a.id == articleId);
@@ -1957,8 +1985,11 @@
 
             let visibleCount = 0;
 
-            articlesData.forEach(item => {
-                if (item.latitude === null || item.longitude === null) return;
+            // Keep inbox stories in the chronological feed without creating map markers.
+            // Prefer mapped data if a placement changed while the two requests were loading.
+            const feedArticles = [...new Map([...inboxData, ...articlesData].map(item => [String(item.id), item])).values()]
+                .sort((a, b) => b.published_at.localeCompare(a.published_at) || Number(b.id) - Number(a.id));
+            feedArticles.forEach(item => {
                 const pubDate = parsePublishDate(item.published_at);
                 
                 const matchesCat = (selectedCatSlug === 'all' || item.category_slug === selectedCatSlug);
@@ -1966,6 +1997,8 @@
 
                 if (matchesCat && matchesDate) {
                     visibleCount++;
+                    appendFeedCard(sidebarFeedEl, item, pubDate);
+                    if (item.latitude === null || item.longitude === null) return;
 
                     const canEdit = currentUser && (currentUser.id == item.user_id || ['admin', 'moderator'].includes(currentUser.role));
 
@@ -2024,6 +2057,7 @@
                                     <div class="timeline-item-date">${updDate} ${upd.source_name ? '• ' + escapeComment(upd.source_name) : ''}</div>
                                     <a href="${escapeComment(upd.url)}" target="_blank" rel="noopener">${escapeComment(upd.title)}</a>
                                     <a href="cached-article.php?id=${item.id}#update-${upd.id}" target="_blank" rel="noopener">Cached article</a>
+                                    ${canDelUpd ? `<button type="button" class="btn-action" onclick="refreshCachedText(${upd.id}, 'update', this)">Refresh cached text</button>` : ''}
                                     ${canDelUpd ? `<button style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:10px;margin-left:4px;" onclick="deleteTimelineUpdate(${upd.id})">✖</button>` : ''}
                                 </li>
                             `;
@@ -2051,6 +2085,7 @@
                                 <button class="btn-action btn-direct-link" onclick="copyDirectLink(${item.id})">Direct Link</button>
                                 ${canEdit ? `
                                     <button class="btn-action" style="color:#0284c7;" onclick="refreshArticleMetadata(${item.id})">🔄 Refresh Data</button>
+                                    <button class="btn-action" onclick="refreshCachedText(${item.id}, 'article', this)">Refresh cached text</button>
                                     <button class="btn-action btn-edit" onclick="editArticle(${item.id})">Edit</button>
                                     <button class="btn-action btn-delete" onclick="deleteArticle(${item.id})">Delete</button>
                                 ` : ''}
@@ -2061,23 +2096,6 @@
                     marker.bindPopup(popupContent);
                     markersCluster.addLayer(marker);
 
-                    const feedCard = document.createElement('div');
-                    feedCard.className = 'feed-item';
-                    feedCard.onclick = () => focusIncident(item.id);
-                    feedCard.innerHTML = `
-                        <div class="feed-item-header">
-                            <span>${escapeComment(item.emoji)} ${pubDate.toLocaleDateString(undefined, { timeZone: APP_TIMEZONE })}</span>
-                            <span>by ${escapeComment(item.author || 'User')}</span>
-                        </div>
-                        <div class="feed-item-title">${escapeComment(item.title)}</div>
-                        ${(injuredNum > 0 || killedNum > 0) ? `
-                            <div style="font-size: 10px; margin-top: 4px; color: #f59e0b; display: flex; gap: 6px;">
-                                ${injuredNum > 0 ? '<span style="color:#d97706">🩹 ' + injuredNum + ' Injured</span>' : ''}
-                                ${killedNum > 0 ? '<span style="color:#dc2626">✝️ ' + killedNum + ' Killed</span>' : ''}
-                            </div>
-                        ` : ''}
-                    `;
-                    sidebarFeedEl.appendChild(feedCard);
                 }
             });
 
@@ -2085,21 +2103,62 @@
             renderBottomTimeline();
         }
 
+        function appendFeedCard(container, item, pubDate) {
+            const unlocated = item.latitude === null || item.longitude === null;
+            const injured = parseInt(item.injured_count) || 0;
+            const killed = parseInt(item.killed_count) || 0;
+            const card = document.createElement('div');
+            card.className = 'feed-item';
+            card.dataset.articleId = item.id;
+            card.tabIndex = 0;
+            card.setAttribute('role', 'button');
+            const open = () => unlocated ? openInbox(item.id) : focusIncident(item.id);
+            card.onclick = open;
+            card.onkeydown = event => {
+                if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); }
+            };
+            card.innerHTML = `
+                <div class="feed-item-header">
+                    <span>${escapeComment(item.emoji)} ${pubDate.toLocaleDateString(undefined, { timeZone: APP_TIMEZONE })}</span>
+                    <span>by ${escapeComment(item.author || 'User')}</span>
+                </div>
+                <div class="feed-item-title">${escapeComment(item.title)}</div>
+                ${unlocated ? '<span class="feed-inbox-badge">📥 No location · Open inbox</span>' : ''}
+                ${(injured > 0 || killed > 0) ? `
+                    <div style="font-size: 10px; margin-top: 4px; display: flex; gap: 6px;">
+                        ${injured > 0 ? '<span style="color:#d97706">🩹 ' + injured + ' Injured</span>' : ''}
+                        ${killed > 0 ? '<span style="color:#dc2626">✝️ ' + killed + ' Killed</span>' : ''}
+                    </div>
+                ` : ''}
+            `;
+            container.appendChild(card);
+        }
+
         function focusIncident(id) {
-            if (inboxData.some(item => item.id == id)) { openInbox(id); return; }
+            if (pendingIncidentFocus) {
+                map.off('moveend', pendingIncidentFocus);
+                pendingIncidentFocus = null;
+            }
+            if (!markersMap[id] && inboxData.some(item => item.id == id)) { openInbox(id); return; }
             highlightTimelineIncident(id);
             const item = articlesData.find(a => a.id == id);
             const marker = markersMap[id];
 
             if (item && marker) {
-                map.flyTo([item.latitude, item.longitude], 15, { duration: 1.2 });
-                setTimeout(() => {
-                    // A placement or inbox refresh may have rebuilt the marker layer.
-                    if (markersMap[id] !== marker || !markersCluster.hasLayer(marker)) return;
-                    markersCluster.zoomToShowLayer(marker, () => {
-                        if (markersMap[id] === marker && map.hasLayer(marker)) marker.openPopup();
+                map.stop();
+                const showPopup = () => {
+                    if (pendingIncidentFocus === showPopup) pendingIncidentFocus = null;
+                    // Wait for the flight to finish and use the current layer if a
+                    // background refresh rebuilt markers while the map was moving.
+                    const currentMarker = markersMap[id];
+                    if (!currentMarker || !markersCluster.hasLayer(currentMarker)) return;
+                    markersCluster.zoomToShowLayer(currentMarker, () => {
+                        if (markersMap[id] === currentMarker && map.hasLayer(currentMarker)) currentMarker.openPopup();
                     });
-                }, 500);
+                };
+                pendingIncidentFocus = showPopup;
+                map.once('moveend', showPopup);
+                map.flyTo([item.latitude, item.longitude], 15, { duration: 1.2 });
             }
         }
 

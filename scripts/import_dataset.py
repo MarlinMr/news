@@ -26,6 +26,7 @@ def main(argv=None):
         result = client.import_archive(archive, info["token"])
         counts = result["counts"]
         print("Import complete: " + ", ".join(f"{counts[key]} {key}" for key in ("articles", "updates", "comments", "snapshots", "pdfs"))
+              + f"; {counts.get('located', 0)} inbox stories placed from source coordinates"
               + f"; {counts['skipped']} previously imported records kept.")
         return 0
     except (OSError, ValueError, RuntimeError, zipfile.BadZipFile, KeyError) as error:
