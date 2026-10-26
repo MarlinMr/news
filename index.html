@@ -487,6 +487,19 @@
             border-color: #475569;
         }
 
+        .timeline-control-icon {
+            display: block;
+            width: 14px;
+            height: 14px;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+        .bottom-timeline.minimized #btnToggleTimeline svg,
+        .sidebar.collapsed ~ .sidebar-toggle-btn svg { transform: rotate(180deg); }
+
         .timeline-track-wrapper {
             position: relative;
             height: 88px;
@@ -593,9 +606,17 @@
             color: #ffffff;
         }
 
-        .timeline-dot:hover {
-            transform: translate(-50%, -50%) scale(1.4);
+        .timeline-dot:hover, .timeline-dot:focus {
             z-index: 50;
+        }
+
+        .timeline-dot-incident, .timeline-dot-update {
+            transition: transform 0.15s ease;
+        }
+
+        .timeline-dot:hover .timeline-dot-incident, .timeline-dot:hover .timeline-dot-update,
+        .timeline-dot:focus .timeline-dot-incident, .timeline-dot:focus .timeline-dot-update {
+            transform: scale(1.4);
             filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.8));
         }
 
@@ -609,7 +630,7 @@
         .timeline-tooltip {
             position: absolute;
             bottom: 30px;
-            left: 50%;
+            left: calc(50% + var(--tooltip-shift, 0px));
             transform: translateX(-50%);
             background: #0f172a;
             border: 1px solid #475569;
@@ -617,19 +638,22 @@
             padding: 6px 10px;
             font-size: 11px;
             color: #f8fafc;
-            white-space: nowrap;
+            width: max-content;
+            max-width: min(360px, calc(100vw - 16px));
+            box-sizing: border-box;
+            white-space: normal;
+            overflow-wrap: anywhere;
             box-shadow: 0 6px 16px rgba(0, 0, 0, 0.7);
             pointer-events: none;
             opacity: 0;
             visibility: hidden;
-            transition: opacity 0.15s ease, visibility 0.15s ease, bottom 0.15s ease;
+            transition: opacity 0.15s ease, visibility 0.15s ease;
             z-index: 100;
         }
 
-        .timeline-dot:hover .timeline-tooltip {
+        .timeline-dot:hover .timeline-tooltip, .timeline-dot:focus .timeline-tooltip {
             opacity: 1;
             visibility: visible;
-            bottom: 34px;
         }
     </style>
 </head>
@@ -771,27 +795,28 @@
             <div class="sidebar-feed" id="sidebarFeed"></div>
         </div>
 
-        <button class="sidebar-toggle-btn" id="sidebarToggleBtn" onclick="toggleSidebar()">▶</button>
+        <button class="sidebar-toggle-btn" id="sidebarToggleBtn" onclick="toggleSidebar()" title="Hide feed" aria-label="Hide feed"><svg class="timeline-control-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg></button>
 
         <!-- INCIDENT TIMELINE BAR -->
         <div id="bottomTimeline" class="bottom-timeline">
             <div class="bottom-timeline-header">
                 <div class="timeline-title-group">
-                    <span class="timeline-icon">⏱️</span>
-                    <span class="timeline-title">Incident Track</span>
+                    <span class="timeline-title">Timeline</span>
                     <label for="bottomTimelineView" class="sr-only">Timeline view</label>
                     <select id="bottomTimelineView" class="category-select" onchange="changeBottomTimelineView(this.value)">
                         <option value="week">Week view</option>
+                        <option value="workweek">Work week (Mon–Fri)</option>
+                        <option value="three-days">Last 3 days</option>
                         <option value="month">Month view</option>
                     </select>
                     <span class="timeline-date-range" id="bottomTimelineRange">--</span>
                     <span class="timeline-count-badge" id="bottomTimelineCount">0 events</span>
                 </div>
                 <div class="bottom-timeline-nav">
-                    <button type="button" id="timelinePrev" class="btn-timeline-nav" onclick="shiftBottomTimelinePeriod(-1)" title="Previous 7 days">◀ Prev Week</button>
-                    <button type="button" id="timelineCurrent" class="btn-timeline-nav" onclick="resetBottomTimelinePeriod()" title="Reset to current week">Current Week</button>
-                    <button type="button" id="timelineNext" class="btn-timeline-nav" onclick="shiftBottomTimelinePeriod(1)" title="Next 7 days">Next Week ▶</button>
-                    <button type="button" class="btn-timeline-toggle" onclick="toggleBottomTimeline()" id="btnToggleTimeline" title="Minimize / Expand Timeline">▾</button>
+                    <button type="button" id="timelinePrev" class="btn-timeline-nav" onclick="shiftBottomTimelinePeriod(-1)" title="Previous week" aria-label="Previous week"><svg class="timeline-control-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m10 4-4 4 4 4"/></svg></button>
+                    <button type="button" id="timelineCurrent" class="btn-timeline-nav" onclick="resetBottomTimelinePeriod()" title="Reset to current week" aria-label="Reset to current week">Now</button>
+                    <button type="button" id="timelineNext" class="btn-timeline-nav" onclick="shiftBottomTimelinePeriod(1)" title="Next week" aria-label="Next week"><svg class="timeline-control-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg></button>
+                    <button type="button" class="btn-timeline-toggle" onclick="toggleBottomTimeline()" id="btnToggleTimeline" title="Minimize timeline" aria-label="Minimize timeline"><svg class="timeline-control-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></button>
                 </div>
             </div>
 
@@ -1294,7 +1319,8 @@
             const sidebar = document.getElementById('sidebar');
             const btn = document.getElementById('sidebarToggleBtn');
             sidebar.classList.toggle('collapsed');
-            btn.innerText = sidebar.classList.contains('collapsed') ? '◀' : '▶';
+            btn.title = sidebar.classList.contains('collapsed') ? 'Show feed' : 'Hide feed';
+            btn.setAttribute('aria-label', btn.title);
         }
 
         function copyDirectLink(id) {
@@ -2362,7 +2388,7 @@
         }
 
         /* ==================================================================
-           BOTTOM 1-WEEK TIMELINE CONTROLS & RENDERING
+           BOTTOM TIMELINE CONTROLS & RENDERING
            ================================================================== */
         let bottomTimelinePeriodOffset = 0;
         let bottomTimelineView = 'week';
@@ -2378,30 +2404,36 @@
                 month.setUTCMonth(month.getUTCMonth() + bottomTimelinePeriodOffset);
                 firstDate = month.toISOString().slice(0, 10);
                 days = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() + 1, 0)).getUTCDate();
+            } else if (bottomTimelineView === 'three-days') {
+                firstDate = shiftCalendarDate(osloParts(base).date, -2 + bottomTimelinePeriodOffset * 3);
+                days = 3;
             } else {
                 const baseDate = osloParts(base).date;
                 const weekday = new Date(baseDate + 'T12:00:00Z').getUTCDay();
                 const daysSinceMonday = (weekday + 6) % 7;
                 firstDate = shiftCalendarDate(baseDate, -daysSinceMonday + bottomTimelinePeriodOffset * 7);
-                days = 7;
+                days = bottomTimelineView === 'workweek' ? 5 : 7;
             }
             const boundaries = Array.from({ length: days + 1 }, (_, i) => parsePublishDate(shiftCalendarDate(firstDate, i)));
             return { start: boundaries[0], end: boundaries[days], boundaries };
         }
 
         function changeBottomTimelineView(view) {
+            if (!['week', 'workweek', 'three-days', 'month'].includes(view)) return;
             // Preserve the period being browsed when switching views.
             const range = getBottomTimelineRange();
-            bottomTimelineBaseDate = new Date(range.end.getTime() - 1);
+            const reference = bottomTimelineBaseDate || new Date();
+            const referenceTime = new Date(reference).getTime();
+            bottomTimelineBaseDate = new Date(bottomTimelinePeriodOffset === 0 ? referenceTime
+                : Math.max(range.start.getTime(), Math.min(referenceTime, range.end.getTime() - 1)));
             bottomTimelineView = view;
             bottomTimelinePeriodOffset = 0;
-            const name = view === 'month' ? 'Month' : 'Week';
-            document.getElementById('timelinePrev').textContent = `◀ Prev ${name}`;
-            document.getElementById('timelineNext').textContent = `Next ${name} ▶`;
-            document.getElementById('timelineCurrent').textContent = `Current ${name}`;
-            document.getElementById('timelinePrev').title = `Previous ${name.toLowerCase()}`;
-            document.getElementById('timelineNext').title = `Next ${name.toLowerCase()}`;
-            document.getElementById('timelineCurrent').title = `Reset to current ${name.toLowerCase()}`;
+            const name = { week: 'week', workweek: 'work week', 'three-days': '3 days', month: 'month' }[view];
+            for (const [id, label] of [['timelinePrev', `Previous ${name}`], ['timelineNext', `Next ${name}`], ['timelineCurrent', `Reset to current ${name}`]]) {
+                const button = document.getElementById(id);
+                button.title = label;
+                button.setAttribute('aria-label', label);
+            }
             renderBottomTimeline();
             fetchArticlesFromAPI();
         }
@@ -2425,11 +2457,11 @@
             const btn = document.getElementById('btnToggleTimeline');
             if (isBottomTimelineMinimized) {
                 el.classList.add('minimized');
-                btn.innerText = '▴';
             } else {
                 el.classList.remove('minimized');
-                btn.innerText = '▾';
             }
+            btn.title = isBottomTimelineMinimized ? 'Expand timeline' : 'Minimize timeline';
+            btn.setAttribute('aria-label', btn.title);
         }
 
         function renderBottomTimeline() {
@@ -2460,9 +2492,10 @@
 
             // Label range
             const optMonthDay = { month: 'short', day: 'numeric', timeZone: APP_TIMEZONE };
-            rangeEl.innerText = `${start.toLocaleDateString(undefined, optMonthDay)} 00:00 → ${end.toLocaleDateString(undefined, optMonthDay)} 00:00 · Europe/Oslo`;
+            rangeEl.innerText = `${start.toLocaleDateString(undefined, optMonthDay)} – ${new Date(end.getTime() - 1).toLocaleDateString(undefined, optMonthDay)} · Oslo`;
+            rangeEl.title = `${osloParts(start).date} 00:00 → ${osloParts(end).date} 00:00 · Europe/Oslo (end exclusive)`;
 
-            // Render 7 Day Markers
+            // Render calendar-day boundaries (including DST-short/long days).
             markersEl.innerHTML = '';
             const todayStr = osloParts().date;
 
@@ -2580,6 +2613,9 @@
 
                 const dot = document.createElement('div');
                 dot.className = 'timeline-dot';
+                dot.tabIndex = 0;
+                dot.setAttribute('role', 'button');
+                dot.setAttribute('aria-label', `${ev.type === 'incident' ? 'Incident' : 'Update'}: ${ev.title}`);
                 dot.dataset.incidentId = String(ev.parentId);
                 dot.classList.toggle('active', String(ev.parentId) === selectedTimelineIncidentId);
                 dot.style.left = `${pct}%`;
@@ -2591,7 +2627,7 @@
 
                 if (ev.type === 'incident') {
                     dot.innerHTML = `
-                        <div class="timeline-dot-incident" title="${escapeComment(ev.title)}">${escapeComment(ev.emoji)}</div>
+                        <div class="timeline-dot-incident">${escapeComment(ev.emoji)}</div>
                         <div class="timeline-tooltip">
                             <strong>${escapeComment(ev.emoji)} ${escapeComment(ev.title)}</strong>
                             <div style="color: #94a3b8; font-size: 10px; margin-top: 2px;">${dateFormatted} at ${timeFormatted}</div>
@@ -2606,7 +2642,7 @@
                     `;
                 } else {
                     dot.innerHTML = `
-                        <div class="timeline-dot-update" title="Update: ${escapeComment(ev.title)}">•</div>
+                        <div class="timeline-dot-update">•</div>
                         <div class="timeline-tooltip">
                             <strong>🔄 Update: ${escapeComment(ev.title)}</strong>
                             <div style="color: #cbd5e1; font-size: 10px; margin-top: 2px;">For: ${escapeComment(ev.parentEmoji)} ${escapeComment(ev.parentTitle)}</div>
@@ -2621,10 +2657,28 @@
                     highlightTimelineIncident(ev.parentId);
                     focusIncident(ev.parentId);
                 };
+                dot.onkeydown = (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); dot.click(); }
+                };
+                dot.onmouseenter = dot.onfocus = () => positionTimelineTooltip(dot);
 
                 dotsEl.appendChild(dot);
             });
         }
+
+        function positionTimelineTooltip(dot) {
+            const tooltip = dot.querySelector('.timeline-tooltip');
+            if (!tooltip) return;
+            tooltip.style.setProperty('--tooltip-shift', '0px');
+            const rect = tooltip.getBoundingClientRect();
+            const margin = 8;
+            const left = Math.max(margin, Math.min(rect.left, document.documentElement.clientWidth - margin - rect.width));
+            tooltip.style.setProperty('--tooltip-shift', `${left - rect.left}px`);
+        }
+
+        window.addEventListener('resize', () => {
+            document.querySelectorAll('.timeline-dot:hover, .timeline-dot:focus').forEach(positionTimelineTooltip);
+        });
 
         function highlightTimelineIncident(id) {
             selectedTimelineIncidentId = String(id);
