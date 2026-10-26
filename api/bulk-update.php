@@ -18,6 +18,9 @@ $categoryEmojiMap = ['general'=>'📰','breaking'=>'🔴','collisions'=>'💥','
 $columns = ['title'=>'title','summary'=>'summary','image'=>'image_url','category'=>'category_slug','injured'=>'injured_count','killed'=>'killed_count'];
 $categoryEmojiMap['nuclear'] = '☢️';
 $categoryEmojiMap['biological-hazard'] = '☣️';
+$categoryEmojiMap['rescue'] = '🛟';
+$categoryEmojiMap['earthquakes'] = '🫨';
+$categoryEmojiMap['weather'] = '🌦️';
 function bulkValue($row, $field, $columns) {
     if ($field === 'date') return substr($row['published_at'], 0, 10);
     if ($field === 'time') return substr($row['published_at'], 11, 5);

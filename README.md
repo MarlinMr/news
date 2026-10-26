@@ -91,6 +91,26 @@ do not append an empty version or replace readable text. Captures can be partial
 and sites requiring JavaScript or a subscription may not provide readable text.
 Uploaded PDFs link to the stored PDF instead of extracting/rechecking its text.
 
+### Automatic categories
+
+Metadata suggestions classify the headline and description using whole-word
+Norwegian/English rules with explicit inflections and compounds. For example,
+`ras` and `steinraset` match landslides, while `Brasil`, `rasisme`, `overraskelse`
+and `operasjon` do not. Specific attacks and hazards take precedence over broad
+topics; police mentions and breaking-news labels are fallbacks. Existing UI
+categories such as politics, health, finance, sports and transport also have
+automatic rules. The category menus and default markers put common news topics
+before less frequent hazards. Suggestions remain editable; this change does not
+automatically recategorize saved articles.
+
+Additional categories include **Missing Persons & Search/Rescue** (`rescue`, 🛟),
+**Earthquakes & Seismic Activity** (`earthquakes`, 🫨), and **Weather & Travel
+Conditions** (`weather`, 🌦️). These support Norwegian and English keywords.
+General weather covers fog, snowfall, rain and icy roads; specific hazards such
+as floods and blizzards take precedence. They are available in the filter,
+article editor and default markers, and are accepted by normal and bulk updates.
+No database migration is needed for these categories.
+
 ### Unlocated inbox
 
 Open **Menu → Inbox** to read saved stories which do not yet have coordinates.

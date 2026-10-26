@@ -730,6 +730,9 @@
                 <option value="🎨" data-slug="culture">🎨 Culture & Arts</option>
                 <option value="⚖️" data-slug="crime">⚖️ Crime & Legal</option>
                 <option value="🗡️" data-slug="violent-crime">🗡️ Violent Crime</option>
+                <option value="🛟" data-slug="rescue">🛟 Missing Persons & Search/Rescue</option>
+                <option value="🫨" data-slug="earthquakes">🫨 Earthquakes & Seismic Activity</option>
+                <option value="🌦️" data-slug="weather">🌦️ Weather & Travel Conditions</option>
             </select>
 
             <div class="preset-group">
@@ -870,6 +873,9 @@
                 <option value="culture">🎨 Culture & Arts</option>
                 <option value="crime">⚖️ Crime & Legal</option>
                 <option value="violent-crime">🗡️ Violent Crime</option>
+                <option value="rescue">🛟 Missing Persons & Search/Rescue</option>
+                <option value="earthquakes">🫨 Earthquakes & Seismic Activity</option>
+                <option value="weather">🌦️ Weather & Travel Conditions</option>
             </select>
             <div id="emojiGrid" class="emoji-grid" role="group" aria-labelledby="emojiGridLabel">
                 <div id="defaultEmojiGroup" class="emoji-group" role="group" aria-labelledby="defaultEmojiLabel">
@@ -1135,39 +1141,53 @@
             'general':        { emoji: '📰', name: 'General News' },
             'breaking':       { emoji: '🔴', name: 'Breaking News' },
             'collisions':     { emoji: '💥', name: 'Collisions & Accidents' },
-            'landslides':     { emoji: '⛰️', name: 'Rockslides & Landslides' },
             'fires':          { emoji: '🔥', name: 'Fires & Wildfires' },
-            'hazards':        { emoji: '⚠️', name: 'General Hazard & Warning' },
-            'nuclear':        { emoji: '☢️', name: 'Nuclear & Radiation' },
-            'biological-hazard': { emoji: '☣️', name: 'Biological Hazard' },
-            'winds':          { emoji: '💨', name: 'High Winds & Gales' },
-            'tornadoes':      { emoji: '🌪️', name: 'Tornadoes & Severe Storms' },
-            'thunderstorms':  { emoji: '🌩️', name: 'Severe Thunderstorm' },
-            'blizzards':      { emoji: '❄️', name: 'Extreme Cold & Blizzards' },
-            'floods':         { emoji: '🌊', name: 'Floods & Waves' },
-            'heatwaves':      { emoji: '☀️', name: 'Extreme Heatwave' },
-            'volcanic':       { emoji: '🌋', name: 'Volcanic Activity' },
-            'drones':         { emoji: '🛸', name: 'Drone Sightings & UAV' },
+            'violent-crime':  { emoji: '🗡️', name: 'Violent Crime' },
+            'crime':          { emoji: '⚖️', name: 'Crime & Legal' },
+            'rescue':         { emoji: '🛟', name: 'Missing Persons & Search/Rescue' },
+            'politics':       { emoji: '📜', name: 'Politics' },
+            'health':         { emoji: '🏥', name: 'Public Health' },
+            'finance':        { emoji: '💰', name: 'Finance & Economy' },
+            'sports':         { emoji: '⚽', name: 'Sports' },
+            'transport':      { emoji: '🚌', name: 'Public Transport & Travel' },
+            'protests':       { emoji: '📢', name: 'Protests & Rallies' },
+            'conflict':       { emoji: '⚔️', name: 'Conflict & Defense' },
             'military':       { emoji: '🎖️', name: 'Military Operations' },
             'missiles':       { emoji: '🚀', name: 'Missile & Air Activity' },
-            'conflict':       { emoji: '⚔️', name: 'Conflict & Defense' },
             'cyber':          { emoji: '💻', name: 'Cyberattacks & IT Outages' },
-            'protests':       { emoji: '📢', name: 'Protests & Rallies' },
-            'politics':       { emoji: '📜', name: 'Politics' },
-            'sports':         { emoji: '⚽', name: 'Sports' },
             'tech-business':  { emoji: '💼', name: 'Tech & Business' },
-            'finance':        { emoji: '💰', name: 'Finance & Economy' },
-            'health':         { emoji: '🏥', name: 'Public Health' },
             'energy':         { emoji: '⚡', name: 'Energy & Power' },
-            'transport':      { emoji: '🚌', name: 'Public Transport & Travel' },
             'maritime':       { emoji: '🚢', name: 'Maritime & Shipping' },
             'infrastructure': { emoji: '🏗️', name: 'Infrastructure & Construction' },
             'science':        { emoji: '🎓', name: 'Education & Science' },
             'wildlife':       { emoji: '🐾', name: 'Wildlife & Environment' },
             'culture':        { emoji: '🎨', name: 'Culture & Arts' },
-            'crime':          { emoji: '⚖️', name: 'Crime & Legal' },
-            'violent-crime':  { emoji: '🗡️', name: 'Violent Crime' }
+            'drones':         { emoji: '🛸', name: 'Drone Sightings & UAV' },
+            'hazards':        { emoji: '⚠️', name: 'General Hazard & Warning' },
+            'weather':        { emoji: '🌦️', name: 'Weather & Travel Conditions' },
+            'landslides':     { emoji: '⛰️', name: 'Rockslides & Landslides' },
+            'earthquakes':    { emoji: '🫨', name: 'Earthquakes & Seismic Activity' },
+            'winds':          { emoji: '💨', name: 'High Winds & Gales' },
+            'floods':         { emoji: '🌊', name: 'Floods & Waves' },
+            'thunderstorms':  { emoji: '🌩️', name: 'Severe Thunderstorm' },
+            'blizzards':      { emoji: '❄️', name: 'Extreme Cold & Blizzards' },
+            'heatwaves':      { emoji: '☀️', name: 'Extreme Heatwave' },
+            'tornadoes':      { emoji: '🌪️', name: 'Tornadoes & Severe Storms' },
+            'volcanic':       { emoji: '🌋', name: 'Volcanic Activity' },
+            'nuclear':        { emoji: '☢️', name: 'Nuclear & Radiation' },
+            'biological-hazard': { emoji: '☣️', name: 'Biological Hazard' }
         };
+
+        // Use the same common-news-first order for both menus and marker defaults.
+        for (const id of ['categoryFilter', 'categorySlug']) {
+            const select = document.getElementById(id);
+            const selected = select.value;
+            for (const slug of Object.keys(CATEGORY_MAP)) {
+                const option = Array.from(select.options).find(option => (option.dataset.slug || option.value) === slug);
+                if (option) select.append(option);
+            }
+            select.value = selected;
+        }
 
         selectCategory('general');
         selectEmoji('📰');
