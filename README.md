@@ -103,8 +103,8 @@ automatic rules. The category menus and default markers put common news topics
 before less frequent hazards. Suggestions remain editable; this change does not
 automatically recategorize saved articles.
 
-Additional categories include **Missing Persons & Search/Rescue** (`rescue`, 🛟),
-**Earthquakes & Seismic Activity** (`earthquakes`, 🫨), and **Weather & Travel
+Additional categories include **Missing Persons & Search/Rescue** (`rescue`, 🔍),
+**Earthquakes & Seismic Activity** (`earthquakes`, 🌍), and **Weather & Travel
 Conditions** (`weather`, 🌦️). These support Norwegian and English keywords.
 General weather covers fog, snowfall, rain and icy roads; specific hazards such
 as floods and blizzards take precedence. They are available in the filter,
