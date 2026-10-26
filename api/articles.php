@@ -105,7 +105,8 @@ if ($method === 'GET') {
     if (($_GET['action'] ?? '') === 'existing_urls') {
         $start = ($_GET['start_date'] ?? '1000-01-01') . ' 00:00:00';
         $end = ($_GET['end_date'] ?? '9999-12-31') . ' 23:59:59';
-        $stmt = $pdo->prepare('SELECT url FROM articles WHERE published_at BETWEEN ? AND ? UNION SELECT url FROM article_updates WHERE published_at BETWEEN ? AND ?');
+        // Older installations may use different collations/charsets per table.
+        $stmt = $pdo->prepare('SELECT CONVERT(url USING utf8mb4) COLLATE utf8mb4_unicode_ci AS url FROM articles WHERE published_at BETWEEN ? AND ? UNION SELECT CONVERT(url USING utf8mb4) COLLATE utf8mb4_unicode_ci AS url FROM article_updates WHERE published_at BETWEEN ? AND ?');
         $stmt->execute([$start, $end, $start, $end]);
         echo json_encode($stmt->fetchAll()); exit;
     }
@@ -137,9 +138,9 @@ if ($method === 'GET') {
         if (!$canCheckAll) $params[] = $_SESSION['user_id'];
         $where = "published_at >= ? AND published_at <= ? AND (cache_checked_at IS NULL OR cache_checked_at <= ?) AND url REGEXP '^https?://' $ownerFilter";
         $stmt = $pdo->prepare("SELECT * FROM (
-            SELECT id, 'article' AS type, title, published_at, cache_checked_at FROM articles WHERE converted_update_id IS NULL AND $where
+            SELECT id, 'article' AS type, CONVERT(title USING utf8mb4) COLLATE utf8mb4_unicode_ci AS title, published_at, cache_checked_at FROM articles WHERE converted_update_id IS NULL AND $where
             UNION ALL
-            SELECT id, 'update' AS type, title, published_at, cache_checked_at FROM article_updates WHERE $where
+            SELECT id, 'update' AS type, CONVERT(title USING utf8mb4) COLLATE utf8mb4_unicode_ci AS title, published_at, cache_checked_at FROM article_updates WHERE $where
         ) candidates ORDER BY cache_checked_at ASC, published_at DESC, type, id LIMIT $limit");
         $stmt->execute(array_merge($params, $params));
         echo json_encode(['candidates' => $stmt->fetchAll()], JSON_UNESCAPED_UNICODE); exit;
