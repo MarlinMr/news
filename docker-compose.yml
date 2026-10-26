@@ -18,6 +18,7 @@ services:
       TILE_SERVER_ATTRIBUTION: ${TILE_SERVER_ATTRIBUTION:-}
       TILE_SERVERS: ${TILE_SERVERS:-}
       RAILWAY_TILE_URL: ${RAILWAY_TILE_URL:-}
+      FRONTEND_ASSETS: ${FRONTEND_ASSETS:-cdn}
     volumes:
       - pdf_data:/pdf
     depends_on:

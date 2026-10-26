@@ -10,6 +10,41 @@ docker compose up -d --build
 
 The site is available at `http://localhost:8080`.
 
+### Local Leaflet JavaScript and CSS
+
+Docker can serve Leaflet **1.9.4** and MarkerCluster **1.5.3** from the container
+instead of `unpkg.com`. Add this to your `.env` file:
+
+```dotenv
+FRONTEND_ASSETS=local
+```
+
+Then rebuild/recreate the web container:
+
+```sh
+docker compose up -d --build web
+```
+
+Or use a one-command override:
+
+```sh
+FRONTEND_ASSETS=local docker compose up -d --build web
+```
+
+The image bundles both libraries, their stylesheets, Leaflet's images, and license
+files. Dependencies are downloaded from checksum-pinned packages during the image
+build; local mode makes no runtime CDN requests for these libraries. Paths are
+site-relative, so serving beneath a URL prefix also works. Set `FRONTEND_ASSETS=cdn`
+(the default) and recreate the web container to switch back. No rebuild is needed
+just to switch modes once the updated image is built.
+
+This controls frontend libraries only. Map tiles, geocoding and publisher article
+fetches still use their configured endpoints. For an offline map deployment, also
+configure the existing tile-server and `NOMINATIM_URL` options described below.
+Docker generates its served `index.html` at startup from a pristine image template;
+use the built-in web root rather than a read-only bind mount over that file.
+Non-Docker deployments continue to use the CDN links in the source HTML.
+
 ### Database
 
 The web container and MariaDB initialization use `MARIADB_DATABASE`,
