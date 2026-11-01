@@ -16,6 +16,9 @@ $context = stream_context_create([
 $html = @file_get_contents($url, false, $context);
 
 if (!$html) {
+    // Keep transport details in server logs, not the public API response.
+    $detail = error_get_last()['message'] ?? 'Empty response';
+    error_log('GeoNews metadata fetch failed for ' . parse_url($url, PHP_URL_HOST) . ': ' . $detail);
     throw new RuntimeException('Could not fetch metadata');
 }
 
@@ -66,7 +69,8 @@ $casualties = extractCasualties($textToAnalyze);
 $guessedCategory = guessCategory($textToAnalyze);
 
 // --- 3. GEOLOCATION GUESSING (Extract Place Name) ---
-$guessedLocation = guessPlaceName($title);
+$locationSuggestions = guessPlaceCandidates($title, $description);
+$guessedLocation = $locationSuggestions[0]['query'] ?? null;
 
 return [
     'title'            => trim($title),
@@ -80,7 +84,8 @@ return [
     'injured'          => $casualties['injured'],
     'killed'           => $casualties['killed'],
     'category_slug'    => $guessedCategory,
-    'suggested_place'  => $guessedLocation
+    'suggested_place'  => $guessedLocation,
+    'location_suggestions' => $locationSuggestions
 ];
 }
 
@@ -163,8 +168,55 @@ function guessCategory($text) {
 
 // Extracts prepositions/place patterns like "i Drammen", "ved Oslo", "near London"
 function guessPlaceName($title) {
-    if (preg_match('/(?:i|ved|på|nær|near|in|at)\s+([A-ZÆØÅ][a-zæøåA-ZÆØÅ\-]+(?:\s+[A-ZÆØÅ][a-zæøåA-ZÆØÅ\-]+)?)/u', $title, $m)) {
-        return trim($m[1]);
+    return guessPlaceCandidates($title)[0]['query'] ?? null;
+}
+
+function guessPlaceCandidates($title, $summary = '') {
+    // Heuristics, not a gazetteer: expose evidence for human review rather than
+    // pretending every capitalised word is a verified incident location.
+    $word = "[\\p{Lu}][\\p{L}\\p{M}]*(?:[-’'][\\p{L}\\p{M}]+)*";
+    $name = "(?:Møre og Romsdal|$word(?:\\s+(?:(?:of|the|de|del)\\s+)?$word){0,3})";
+    $preposition = '(?i:i|på|ved|nær|utenfor|utanfor|til|in|on|at|near|outside|off|to)';
+    $patterns = [
+        // Prefer the whole contextual location over an ambiguous first name.
+        '/(?<![\p{L}\p{N}])' . $preposition . '\s+(' . $name . ')\s+(?i:i|in)\s+(' . $name . ')/u',
+        '/(?<![\p{L}\p{N}])' . $preposition . '\s+(' . $name . ')/u',
+        '/(?<![\p{L}\p{N}])' . $preposition . '\s+' . $name . '\s+(?:og|and)\s+(' . $name . ')/u',
+        '/^\s*(' . $name . ')\s*:(?=.*(?i:brann|ulykke|skad|trafikk|kollisjon|evaku|pågrep|sakna|savn|angrep|eksplosjon|forsinkel|innstilling|fire|crash|injur|kill|attack|flood|earthquake|missing|dead|death|explosion|evacuat|police|protest))/u',
+        '/(?<![\p{L}\p{N}])(?i:evakuering\s+av|evacuation\s+of)\s+(' . $name . ')/u',
+    ];
+    $blocked = '/(?:^|[\s-])(?:FN|UN|NATO|FBI|FSB|NRK|BBC|Reuters|NTB|AFP|VG|Avis|FHI|NVE|SSB|UiT|SAS|Meta|Google|Microsoft|Statkraft|Equinor|Stortinget|Høyesterett|Kreml|Kremlin|Supreme Court|World Expression Forum|Instagram|Facebook|Telegram|Truth Social|Ethereum|Chainalysis|Skatteetaten|Helsedirektoratet|Folkehelseinstituttet|Fellesforbundet|Riksmekleren|Skolelederforbundet|Demenskoret|Barnehuset|Telenor)(?:$|[\s-])/iu';
+    $nonPlaceCompound = '/-(?:samtal|endring|saka|saken|møte|besøk|plan|talk|meeting)/iu';
+    $aliases = [
+        'gaza' => 'Gaza Strip, Palestine', 'gazastripen' => 'Gaza Strip, Palestine',
+        'hormuzstredet' => 'Strait of Hormuz', 'persiabukta' => 'Persian Gulf',
+        'olesjky' => 'Oleshky, Ukraine',
+        'uk' => 'United Kingdom', 'us' => 'United States', 'usa' => 'United States',
+        'uae' => 'United Arab Emirates', 'gaza strip' => 'Gaza Strip, Palestine',
+    ];
+    $suggestions = [];
+    foreach (['title' => $title, 'summary' => $summary] as $source => $text) {
+        $text = preg_replace('/\s+/u', ' ', strip_tags($text));
+        foreach ($patterns as $patternIndex => $pattern) {
+            preg_match_all($pattern, $text, $matches, PREG_SET_ORDER);
+            foreach ($matches as $match) {
+                $place = trim($match[1]);
+                if (isset($match[2]) && $match[2] !== '') $place .= ', ' . trim($match[2]);
+                if (preg_match($blocked, $place) || preg_match($nonPlaceCompound, $place)) continue;
+                $key = mb_strtolower($place);
+                if ((mb_strlen($place) < 3 && !isset($aliases[$key])) || mb_strlen($place) > 100) continue;
+                $query = $aliases[$key] ?? $place;
+                $queryKey = mb_strtolower($query);
+                if (isset($suggestions[$queryKey])) continue;
+                $suggestions[$queryKey] = [
+                    'place' => $place, 'query' => $query,
+                    'source' => $source,
+                    // Source/route locations are useful for review, not automatic pins.
+                    'confidence' => $source === 'title' && $patternIndex !== 3 && !preg_match('/^(?:til|to)\s/iu', $match[0]) ? 'high' : 'review',
+                    'evidence' => $match[0],
+                ];
+            }
+        }
     }
-    return null;
+    return array_slice(array_values($suggestions), 0, 8);
 }

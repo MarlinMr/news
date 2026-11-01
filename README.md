@@ -440,6 +440,40 @@ before republishing; public feed access is not blanket permission to copy conten
 
 Tests: `python3 -m unittest discover -s tests -p 'test_*news.py'`.
 
+### Location suggestions and inbox review
+
+Both NRK and BBC watchers use the same Norwegian/English location rules. Metadata
+now includes an additive `location_suggestions` list alongside the existing
+`suggested_place` field. Guesses use headlines and descriptions, including places
+before a colon, compound names, and contextual names such as Majorstuen in Oslo.
+Common translated names such as Hormuzstredet have geocoder query aliases.
+
+If fetching the original page fails, watchers ask the site's text-only
+`api/location-suggestions.php` endpoint to analyse the RSS title and summary.
+This needs the updated website as well as the updated script. Transport failures
+are logged by the PHP metadata fetcher for diagnosis; fallback does not repair a
+hosting/network restriction on fetching the original page or cached text.
+
+Automatic placement requires a single high-confidence headline location and an
+unambiguous name-matching geocoder result, not just the first search hit. Summary
+guesses, multiple distinct headline locations, and uncertain results stay in the
+inbox. These rules are intentionally conservative; guesses are not verified facts.
+Cache rechecks still do not automatically relocate inbox stories.
+
+In **Inbox → Suggest locations**, users can see several possible places and the
+headline/summary evidence. Each **Search** retrieves up to five geocoder results;
+**Review on map** centres the map without saving anything. The user must still
+click the incident location and confirm placement. Searches are user-triggered,
+not run for every inbox story on page load. Suggestions can be reviewed without
+signing in, but placing a story still requires sign-in.
+
+Suggestions are generated on demand from existing text. There are **no database
+changes and no archive-format changes**: existing v1–v4 imports and ongoing
+exports keep their existing behaviour, and confirmed locations still use the
+ordinary `latitude`/`longitude` fields. No suggestion data is added to archives.
+
+Location rule tests: `php tests/location-suggestions.php`.
+
 ### Map services
 
 Example `.env` overrides:

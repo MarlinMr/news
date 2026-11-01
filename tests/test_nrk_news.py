@@ -27,6 +27,7 @@ class NRKNewsTests(unittest.TestCase):
         self.articles = []
         self.posts = []
         self.location = "Trondheim"
+        self.suggestions = []
         self.reject_post = False
         self.uncertain_post = False
         self.requests = []
@@ -62,7 +63,7 @@ class NRKNewsTests(unittest.TestCase):
                 elif self.path.startswith("/news/api/parse_og.php"):
                     self.send_json({"suggested_place": test.location, "category_slug": "fires", "injured": 2})
                 elif self.path.startswith("/search?"):
-                    self.send_json([{"lat": "63.43", "lon": "10.39"}])
+                    self.send_json([{"lat": "63.43", "lon": "10.39", "name": "Trondheim", "display_name": "Trondheim, Norway", "class": "boundary", "type": "administrative"}])
                 else:
                     self.send_json({"error": "Not found"}, 404)
 
@@ -77,6 +78,8 @@ class NRKNewsTests(unittest.TestCase):
                     return
                 if self.headers.get("Cookie") != "PHPSESSID=test-session":
                     self.send_json({"error": "Please log in"}, 401)
+                elif self.path == "/news/api/location-suggestions.php":
+                    self.send_json({"location_suggestions": test.suggestions})
                 elif payload.get('action') == 'refresh_cache':
                     self.send_json({'status': test.refresh_status, 'version_key': 'a' * 32})
                 elif test.reject_post:
@@ -206,6 +209,47 @@ class NRKNewsTests(unittest.TestCase):
             self.assertTrue(nrk.process(nrk.parse_feed(RSS), self.options, self.publisher, self.db))
         self.assertEqual(len(self.articles), 2)
         self.assertEqual(self.articles[0]["action"], "add_inbox")
+
+    def test_rss_fallback_when_source_fetch_fails(self):
+        self.options.geocode = True
+        self.suggestions = [{"place": "Trondheim", "query": "Trondheim", "confidence": "high"}]
+        original = self.publisher.api
+        def fail_metadata(path, payload=None):
+            if path.startswith('parse_og.php'):
+                raise RuntimeError('Could not fetch metadata')
+            return original(path, payload)
+        with patch.object(self.publisher, 'api', side_effect=fail_metadata), patch.object(nrk.time, 'sleep'):
+            self.assertTrue(nrk.process(nrk.parse_feed(RSS), self.options, self.publisher, self.db))
+        self.assertEqual(self.articles[0]['latitude'], 63.43)
+        payloads = [payload for path, payload in self.posts if path.endswith('location-suggestions.php')]
+        self.assertEqual(payloads[0]['summary'], 'First paragraph.')
+
+    def test_review_only_suggestions_stay_in_inbox(self):
+        self.location = None
+        self.options.geocode = True
+        self.suggestions = [{"place": "Trondheim", "query": "Trondheim", "confidence": "review"}]
+        nrk.process(nrk.parse_feed(RSS), self.options, self.publisher, self.db)
+        self.assertEqual(self.articles[0]['action'], 'add_inbox')
+        self.assertFalse(any(path.startswith('/search?') for path, headers in self.requests))
+
+    def test_multiple_headline_locations_stay_in_inbox(self):
+        self.location = None
+        self.options.geocode = True
+        self.suggestions = [{"place": place, "query": place, "confidence": "high"} for place in ['London', 'Paris']]
+        nrk.process(nrk.parse_feed(RSS), self.options, self.publisher, self.db)
+        self.assertEqual(self.articles[0]['action'], 'add_inbox')
+        self.assertFalse(any(path.startswith('/search?') for path, headers in self.requests))
+
+    def test_ambiguous_and_fuzzy_geocoder_results_are_rejected(self):
+        trondheim = {'name': 'Trondheim', 'display_name': 'Trondheim, Norway'}
+        self.assertEqual(nrk.choose_geocoder_match('Trondheim', [trondheim]), trondheim)
+        self.assertIsNone(nrk.choose_geocoder_match('Trondheim', [trondheim, trondheim]))
+        self.assertIsNone(nrk.choose_geocoder_match('Nord-Fosen', [{'name': 'Måvatnet', 'type': 'water'}]))
+        self.assertIsNone(nrk.choose_geocoder_match('Gaza Strip, Palestine', [{'name': 'Gaza', 'display_name': 'Gaza, Mozambique'}]))
+        gaza = {'name': 'Gaza Strip', 'display_name': 'Gaza Strip, Palestinian Territories', 'address': {'country_code': 'ps'}}
+        self.assertEqual(nrk.choose_geocoder_match('Gaza Strip, Palestine', [gaza]), gaza)
+        self.assertIsNone(nrk.choose_geocoder_match('London', [{'name': 'London', 'class': 'shop'}]))
+        self.assertIsNone(nrk.choose_geocoder_match('Richmond, London', [{'name': 'Richmond', 'display_name': 'Richmond, Virginia, USA'}]))
 
     def test_duplicate_lookup_includes_inbox(self):
         self.publisher.existing_urls(nrk.parse_feed(RSS))

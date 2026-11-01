@@ -1511,7 +1511,71 @@
                     const refresh = document.createElement('button'); refresh.type = 'button'; refresh.className = 'btn-action'; refresh.textContent = 'Refresh cached text'; refresh.onclick = () => refreshCachedText(item.id, 'article', refresh); links.append(refresh);
                 }
                 card.append(title, meta, summary, links); list.append(card);
+                const suggestions = document.createElement('div'); suggestions.className = 'inbox-location-suggestions';
+                const suggest = document.createElement('button'); suggest.type = 'button'; suggest.className = 'btn-action'; suggest.textContent = 'Suggest locations';
+                suggest.onclick = () => showInboxLocationSuggestions(item, suggestions, suggest);
+                suggestions.append(suggest); card.append(suggestions);
             });
+        }
+
+        async function showInboxLocationSuggestions(item, container, button) {
+            button.disabled = true;
+            try {
+                const response = await fetch('api/location-suggestions.php', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: item.title, summary: item.summary || '' })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Could not suggest locations.');
+                container.replaceChildren();
+                const note = document.createElement('p'); note.className = 'inbox-meta';
+                note.textContent = data.location_suggestions.length ? 'Possible places—not verified. Search a guess, review the results, then confirm on the map.' : 'No place guesses found. Read the article and use Place on map.';
+                container.append(note);
+                data.location_suggestions.forEach(suggestion => {
+                    const row = document.createElement('div');
+                    const search = document.createElement('button'); search.type = 'button'; search.className = 'btn-action';
+                    search.textContent = `Search ${suggestion.place}`;
+                    const evidence = document.createElement('span'); evidence.className = 'inbox-meta';
+                    evidence.textContent = ` ${suggestion.source === 'title' ? 'Headline' : 'Summary'}: “${suggestion.evidence}”`;
+                    const results = document.createElement('div');
+                    search.onclick = () => searchInboxLocationGuess(item, suggestion.query, results, search);
+                    row.append(search, evidence, results); container.append(row);
+                });
+            } catch (error) {
+                button.disabled = false;
+                const message = document.createElement('p'); message.textContent = error.message; container.append(message);
+            }
+        }
+
+        // User-triggered and serialised: never geocode the whole inbox on load.
+        let lastInboxGeocodeAt = 0;
+        let inboxGeocodeBusy = false;
+        async function searchInboxLocationGuess(item, query, container, button) {
+            if (inboxGeocodeBusy) return;
+            inboxGeocodeBusy = true; button.disabled = true;
+            container.replaceChildren();
+            try {
+                await new Promise(resolve => setTimeout(resolve, Math.max(0, 1100 - (Date.now() - lastInboxGeocodeAt))));
+                lastInboxGeocodeAt = Date.now();
+                const url = new URL(nominatimSearchUrl(query));
+                url.searchParams.set('limit', '5');
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('Location search failed. Try again later.');
+                const matches = await response.json();
+                if (!matches.length) container.textContent = 'No matches. Try the map location search with another spelling.';
+                matches.forEach(match => {
+                    const latitude = Number(match.lat), longitude = Number(match.lon);
+                    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return;
+                    const review = document.createElement('button'); review.type = 'button'; review.className = 'btn-action';
+                    review.style.display = 'block'; review.textContent = `Review on map: ${match.display_name}`;
+                    review.onclick = () => {
+                        startInboxPlacement(item.id);
+                        if (placingInboxId == item.id) map.flyTo([latitude, longitude], 12);
+                    };
+                    container.append(review);
+                });
+            } catch (error) { container.textContent = error.message; }
+            finally { button.disabled = false; inboxGeocodeBusy = false; }
         }
 
         function startInboxPlacement(id) {

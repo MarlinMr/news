@@ -13,6 +13,7 @@ import re
 import sqlite3
 import sys
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -155,6 +156,35 @@ class Feed:
         return self.stories
 
 
+def normalized_place(value):
+    return " ".join("".join(c for c in unicodedata.normalize("NFKD", value.casefold())
+                            if not unicodedata.combining(c)).replace("-", " ").split())
+
+
+def choose_geocoder_match(query, matches):
+    """Reject fuzzy POI matches and ambiguous names instead of taking result #1."""
+    parts = [normalized_place(part) for part in query.split(",") if part.strip()]
+    if not parts:
+        return None
+    accepted = []
+    for match in matches:
+        if match.get("class", match.get("category")) in {"shop", "amenity", "tourism", "office", "building"}:
+            continue
+        if match.get("type") in {"water", "lake", "pond", "reservoir", "stream"}:
+            continue
+        names = [match.get("name", ""), match.get("display_name", "").split(",")[0]]
+        names.extend((match.get("namedetails") or {}).values())
+        if parts[0] not in {normalized_place(name) for name in names if isinstance(name, str)}:
+            continue
+        context = normalized_place(match.get("display_name", ""))
+        country_code = (match.get("address") or {}).get("country_code", "")
+        if any(part not in context and not (part == "palestine" and country_code == "ps") for part in parts[1:]):
+            continue
+        accepted.append(match)
+    # Different matching features are intentionally left for the inbox reviewer.
+    return accepted[0] if len(accepted) == 1 else None
+
+
 class Publisher:
     def __init__(self, client, site, username, password):
         self.client, self.site = client, site.rstrip("/") + "/"
@@ -181,18 +211,44 @@ class Publisher:
             latitude, longitude = None, None
             try:
                 metadata = self.api("parse_og.php?" + urllib.parse.urlencode({"url": story["url"]}))
-                place = metadata.get("suggested_place")
-                if place:
+            except (RuntimeError, ValueError, OSError) as error:
+                print(f"Source metadata unavailable; trying RSS text: {error}", file=sys.stderr, flush=True)
+            try:
+                suggestions = metadata.get("location_suggestions")
+                if suggestions is None and metadata.get("suggested_place"):
+                    # Compatibility with sites running the older metadata endpoint.
+                    place = metadata["suggested_place"]
+                    suggestions = [{"place": place, "query": place, "confidence": "high"}]
+                if not suggestions:
+                    result = self.api("location-suggestions.php", {"title": story["title"], "summary": story["summary"]})
+                    suggestions = result.get("location_suggestions", [])
+                eligible = [s for s in suggestions if s.get("confidence") == "high"]
+                # Multiple distinct locations need human review. Contextual variants
+                # such as "Majorstuen, Oslo" / "Majorstuen" / "Oslo" are one query.
+                candidate = eligible[0] if eligible else None
+                if candidate:
+                    same_location = {normalized_place(candidate["place"]),
+                                     *(normalized_place(part) for part in candidate["place"].split(","))}
+                    if any(normalized_place(s["place"]) not in same_location for s in eligible[1:]):
+                        candidate = None
+                if candidate:
+                    place = candidate["query"]
                     # Respect the public Nominatim limit; also polite for private services.
                     time.sleep(1.1)
-                    query = urllib.parse.urlencode({"q": place, "format": "json", "limit": 1})
+                    query = urllib.parse.urlencode({"q": place, "format": "json", "limit": 5, "namedetails": 1,
+                                                    "addressdetails": 1, "accept-language": "en"})
                     matches = self.client.json(options.geocoder.rstrip("/") + "/search?" + query)
-                    if matches:
-                        lat, lon = float(matches[0]["lat"]), float(matches[0]["lon"])
+                    match = choose_geocoder_match(place, matches)
+                    if match:
+                        lat, lon = float(match["lat"]), float(match["lon"])
                         if not math.isfinite(lat) or not math.isfinite(lon) or abs(lat) > 90 or abs(lon) > 180:
                             raise ValueError("Geocoder returned invalid coordinates.")
                         latitude, longitude = lat, lon
                         print(f"Location suggestion: {place} → {latitude}, {longitude}", file=sys.stderr, flush=True)
+                    else:
+                        print(f"No unambiguous geocoder match for {place}; saving to inbox", file=sys.stderr, flush=True)
+                else:
+                    print("No single high-confidence location; saving to inbox for review", file=sys.stderr, flush=True)
             except (RuntimeError, ValueError, OSError, KeyError, TypeError) as error:
                 print(f"Location lookup failed; saving to inbox: {error}", file=sys.stderr, flush=True)
         inbox = latitude is None or longitude is None
