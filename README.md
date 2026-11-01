@@ -462,8 +462,9 @@ Cache rechecks still do not automatically relocate inbox stories.
 
 In **Inbox → Suggest locations**, users can see several possible places and the
 headline/summary evidence. Each **Search** retrieves up to five geocoder results;
-**Review on map** centres the map without saving anything. The user must still
-click the incident location and confirm placement. Searches are user-triggered,
+**Accept location** saves a result directly without leaving the inbox dialog.
+**Review on map** is optional: it centres the map without saving anything, so the
+user can click the incident location and confirm placement. Searches are user-triggered,
 not run for every inbox story on page load. Suggestions can be reviewed without
 signing in, but placing a story still requires sign-in.
 

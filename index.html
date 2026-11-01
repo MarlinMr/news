@@ -1553,6 +1553,40 @@
         // User-triggered and serialised: never geocode the whole inbox on load.
         let lastInboxGeocodeAt = 0;
         let inboxGeocodeBusy = false;
+        const inboxLocationSaves = new Set();
+        async function acceptInboxLocation(item, latitude, longitude, feedback) {
+            const key = String(item.id);
+            if (inboxLocationSaves.has(key)) return;
+            if (!currentUser) { closeModal('inboxModal'); openAuthModal(); return; }
+            inboxLocationSaves.add(key);
+            document.querySelectorAll('[data-inbox-accept-id]').forEach(button => {
+                if (button.dataset.inboxAcceptId === key) button.disabled = true;
+            });
+            feedback.textContent = 'Saving location…';
+            try {
+                const response = await fetch('api/articles.php', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'place_inbox', id: item.id, latitude, longitude })
+                });
+                const data = await response.json();
+                if (response.status === 401) {
+                    currentUser = null; closeModal('inboxModal'); openAuthModal();
+                    throw new Error(data.error || 'Please sign in, then try accepting the location again.');
+                }
+                if (!response.ok && response.status !== 409 && response.status !== 404) throw new Error(data.error || 'Could not place this story.');
+                if (placingInboxId == item.id && !inboxPlacementSaving) cancelInboxPlacement();
+                inboxData = inboxData.filter(story => story.id != item.id);
+                renderInbox();
+                showToast(response.ok ? `Location accepted for “${item.title}”.` : (data.error || 'This story is no longer in the inbox.'));
+                await fetchArticlesFromAPI();
+            } catch (error) { feedback.textContent = error.message; showToast(error.message); }
+            finally {
+                inboxLocationSaves.delete(key);
+                document.querySelectorAll('[data-inbox-accept-id]').forEach(button => {
+                    if (button.dataset.inboxAcceptId === key) button.disabled = false;
+                });
+            }
+        }
         async function searchInboxLocationGuess(item, query, container, button) {
             if (inboxGeocodeBusy) return;
             inboxGeocodeBusy = true; button.disabled = true;
@@ -1567,15 +1601,24 @@
                 const matches = await response.json();
                 if (!matches.length) container.textContent = 'No matches. Try the map location search with another spelling.';
                 matches.forEach(match => {
+                    if (match.lat == null || match.lon == null || !String(match.lat).trim() || !String(match.lon).trim()) return;
                     const latitude = Number(match.lat), longitude = Number(match.lon);
                     if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return;
+                    const result = document.createElement('div');
+                    const name = document.createElement('p'); name.className = 'inbox-meta';
+                    name.textContent = `${match.display_name || query} · ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+                    const accept = document.createElement('button'); accept.type = 'button'; accept.className = 'btn-action';
+                    accept.textContent = currentUser ? 'Accept location' : 'Sign in to accept location';
+                    accept.dataset.inboxAcceptId = item.id; accept.disabled = inboxLocationSaves.has(String(item.id));
+                    const feedback = document.createElement('p'); feedback.className = 'inbox-meta'; feedback.setAttribute('role', 'status');
+                    accept.onclick = () => acceptInboxLocation(item, latitude, longitude, feedback);
                     const review = document.createElement('button'); review.type = 'button'; review.className = 'btn-action';
                     review.style.display = 'block'; review.textContent = `Review on map: ${match.display_name}`;
                     review.onclick = () => {
                         startInboxPlacement(item.id);
                         if (placingInboxId == item.id) map.flyTo([latitude, longitude], 12);
                     };
-                    container.append(review);
+                    result.append(name, accept, review, feedback); container.append(result);
                 });
             } catch (error) { container.textContent = error.message; }
             finally { button.disabled = false; inboxGeocodeBusy = false; }
@@ -1605,8 +1648,8 @@
             if (!currentUser) { openAuthModal(); return; }
             startInboxPlacement(id);
             map.flyTo([lat, lon], 12);
-            // Review links only move the view. The existing map-click and explicit
-            // confirmation flow remains the only way to save this location.
+            // Review links only move the view; they never accept a location.
+            // Manual placement still requires a map click and confirmation.
             ['review_inbox', 'lat', 'lon'].forEach(key => params.delete(key));
             const url = new URL(window.location); url.search = params.toString();
             window.history.replaceState({}, '', url);
