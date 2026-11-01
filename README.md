@@ -402,6 +402,44 @@ manager if you want it to stay running.
 
 Tests: `python3 -m unittest discover -s tests -p 'test_nrk_news.py'`.
 
+### BBC news reader (external Python script)
+
+`scripts/bbc_news.py` shares the NRK reader's publishing, geocoding, retry,
+deduplication, and cache-recheck behaviour, but defaults to **BBC World** and uses
+its own state file (`~/.local/state/geonews/bbc-news.sqlite3`) and credentials.
+The NRK reader's credentials and defaults are unchanged.
+
+Create a separate GeoNews contributor account for BBC submissions, then run:
+
+```sh
+BBC_GEONEWS_USERNAME='YOUR_BBC_ACCOUNT' BBC_GEONEWS_PASSWORD='YOUR_BBC_PASSWORD' \
+python3 scripts/bbc_news.py --watch --interval 300 --geocode --site https://YOUR_HOST/news/
+```
+
+These are credentials for **your GeoNews site**, not BBC credentials; the public
+RSS feeds need no login. No account or password is created by the script. Without
+`--site`, it only lists stories (for example, `python3 scripts/bbc_news.py --limit 10`).
+All NRK watcher options above also apply, including `--feed URL` and `--state PATH`.
+
+Suggested BBC feeds:
+
+| Feed | URL | Use |
+| --- | --- | --- |
+| **World (default)** | `https://feeds.bbci.co.uk/news/world/rss.xml` | Best starting point for international map coverage. |
+| Europe | `https://feeds.bbci.co.uk/news/world/europe/rss.xml` | More focused European coverage. |
+| UK | `https://feeds.bbci.co.uk/news/uk/rss.xml` | Domestic UK coverage. |
+| Top stories | `https://feeds.bbci.co.uk/news/rss.xml` | Broad headline selection, with substantial overlap with World/UK. |
+
+Each process watches one feed. For multiple feeds, run separate processes with
+different `--state` files; server-side URL checks help deduplicate overlapping
+stories. BBC domain variants and RSS tracking parameters are ignored for duplicate
+identity. RSS thumbnails are used when present. Not every story has a clear
+location: with `--geocode`, unresolved locations go to the inbox for review.
+Check [BBC's RSS reuse terms](https://www.bbc.co.uk/usingthebbc/terms-of-use/#15metadataandrssfeeds)
+before republishing; public feed access is not blanket permission to copy content.
+
+Tests: `python3 -m unittest discover -s tests -p 'test_*news.py'`.
+
 ### Map services
 
 Example `.env` overrides:

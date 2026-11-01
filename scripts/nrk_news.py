@@ -59,6 +59,8 @@ def story_key(url):
     match = re.search(r"(\d+\.\d+)$", parts.path.rstrip("/"))
     if parts.hostname in ("nrk.no", "www.nrk.no") and match:
         return "nrk:" + match.group(1)  # Headline/URL edits keep the same NRK article ID.
+    if parts.hostname in ("bbc.co.uk", "www.bbc.co.uk", "bbc.com", "www.bbc.com"):
+        return "bbc:" + parts.path.rstrip("/")  # Ignore RSS tracking and BBC domain variants.
     return url
 
 
@@ -81,6 +83,8 @@ def parse_feed(content):
         if not title:
             continue
         image = item.find("{http://search.yahoo.com/mrss/}content[@medium='image']")
+        if image is None:
+            image = item.find("{http://search.yahoo.com/mrss/}thumbnail")
         image_url = image.get("url", "") if image is not None else ""
         if image_url:
             try:
@@ -99,7 +103,8 @@ def parse_feed(content):
 
 
 class Client:
-    def __init__(self):
+    def __init__(self, user_agent=USER_AGENT):
+        self.user_agent = user_agent
         self.opener = urllib.request.build_opener(
             urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
         )
@@ -107,7 +112,7 @@ class Client:
     def request(self, url, payload=None, headers=None):
         request = urllib.request.Request(
             url, data=json.dumps(payload).encode() if payload is not None else None,
-            headers={"User-Agent": USER_AGENT, **({"Content-Type": "application/json"} if payload is not None else {}), **(headers or {})},
+            headers={"User-Agent": self.user_agent, **({"Content-Type": "application/json"} if payload is not None else {}), **(headers or {})},
         )
         try:
             with self.opener.open(request, timeout=60) as response:
@@ -271,15 +276,18 @@ def process(stories, options, publisher=None, db=None):
     return not failed
 
 
-def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--feed", default=FEED, help="RSS feed URL (default: NRK latest news)")
+def main(argv=None, *, source="NRK", feed_url=FEED, state_name="nrk-news",
+         credential_prefix="GEONEWS", user_agent=USER_AGENT):
+    username_env = credential_prefix + "_USERNAME"
+    password_env = credential_prefix + "_PASSWORD"
+    parser = argparse.ArgumentParser(description=f"List/watch {source} RSS stories, optionally publishing to GeoNews. Python 3.10+.")
+    parser.add_argument("--feed", default=feed_url, help=f"RSS feed URL (default: {feed_url})")
     parser.add_argument("--limit", type=int, default=20, help="Latest feed entries to consider each poll (default: 20)")
     parser.add_argument("--watch", action="store_true", help="Keep polling and report only unseen stories")
     parser.add_argument("--interval", type=int, default=300, help="Polling interval in seconds, at least 60 (default: 300)")
     parser.add_argument("--json", action="store_true", help="Output one JSON object per story")
-    parser.add_argument("--state", default="~/.local/state/geonews/nrk-news.sqlite3", help="Persistent duplicate tracking file")
-    parser.add_argument("--site", help="Save stories to this GeoNews base URL (inbox by default); reads GEONEWS_USERNAME and GEONEWS_PASSWORD")
+    parser.add_argument("--state", default=f"~/.local/state/geonews/{state_name}.sqlite3", help="Persistent duplicate tracking file")
+    parser.add_argument("--site", help=f"Save stories to this GeoNews base URL (inbox by default); reads {username_env} and {password_env}")
     parser.add_argument("--latitude", type=float, help="Use these fixed coordinates for every published story")
     parser.add_argument("--longitude", type=float)
     parser.add_argument("--geocode", action="store_true", help="Try GeoNews/Nominatim locations; save unlocated stories to the inbox")
@@ -297,8 +305,8 @@ def main(argv=None):
         http_url(options.feed)
         if options.site:
             http_url(options.site)
-            if not os.environ.get("GEONEWS_USERNAME") or not os.environ.get("GEONEWS_PASSWORD"):
-                parser.error("Set GEONEWS_USERNAME and GEONEWS_PASSWORD to a GeoNews contributor account")
+            if not os.environ.get(username_env) or not os.environ.get(password_env):
+                parser.error(f"Set {username_env} and {password_env} to a GeoNews contributor account")
             if options.geocode:
                 http_url(options.geocoder)
                 if options.latitude is not None or options.longitude is not None:
@@ -312,9 +320,9 @@ def main(argv=None):
             parser.error("Location options require --site")
     except ValueError as error:
         parser.error(str(error))
-    client = Client()
+    client = Client(user_agent=user_agent)
     feed = Feed(client, options.feed)
-    publisher = Publisher(client, options.site, os.environ["GEONEWS_USERNAME"], os.environ["GEONEWS_PASSWORD"]) if options.site else None
+    publisher = Publisher(client, options.site, os.environ[username_env], os.environ[password_env]) if options.site else None
     db = open_state(options.state) if options.site or options.watch else None
     try:
         while True:
@@ -325,14 +333,14 @@ def main(argv=None):
                     success = process(feed.fetch(), options, publisher, db)
                 except (RuntimeError, ValueError, OSError, ET.ParseError, sqlite3.Error) as error:
                     success = False
-                    print(f"NRK feed: {error}", file=sys.stderr, flush=True)
+                    print(f"{source} feed: {error}", file=sys.stderr, flush=True)
                 # Database-backed scheduling also covers stories no longer present in RSS.
                 if publisher:
                     success = publisher.recheck_recent(options) and success
                 if not options.watch:
                     return 0 if success else 1
             except (RuntimeError, ValueError, OSError, ET.ParseError, sqlite3.Error, KeyError) as error:
-                print(f"NRK reader: {error}", file=sys.stderr, flush=True)
+                print(f"{source} reader: {error}", file=sys.stderr, flush=True)
                 if not options.watch:
                     return 1
             time.sleep(options.interval)
