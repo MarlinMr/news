@@ -467,6 +467,19 @@ click the incident location and confirm placement. Searches are user-triggered,
 not run for every inbox story on page load. Suggestions can be reviewed without
 signing in, but placing a story still requires sign-in.
 
+For a full-page overview, open **Menu → Review inbox locations**
+(`inbox-locations.html`). It lists all unlocated stories with text/author filtering
+and pagination. Place guesses load automatically from saved headlines/summaries;
+external geocoder searches only run when you click a guess, **Search all guesses
+for this story**, or submit a custom location search. Searches are queued at least
+1.1 seconds apart, repeated queries are reused while the page is open, and **Stop
+searches** cancels the current/queued searches. Each result shows its full place
+name and coordinates. **Review and place on map** opens the existing map in a new
+tab, preserving the review page; sign in if needed, then click the map and confirm
+placement. No location is saved just by following a review link. Reload the inbox
+after placing stories to remove them from the list. This page shows new review
+searches, not historical searches performed by the Python watchers.
+
 Suggestions are generated on demand from existing text. There are **no database
 changes and no archive-format changes**: existing v1–v4 imports and ongoing
 exports keep their existing behaviour, and confirmed locations still use the

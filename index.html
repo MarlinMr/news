@@ -670,6 +670,7 @@
                 <div class="header-menu-panel">
                     <nav class="header-links" aria-label="Help"><a href="docs/">Docs / How-to</a></nav>
                     <button type="button" class="inbox-button" id="inboxButton" onclick="openInbox()">Inbox</button>
+                    <a href="inbox-locations.html">Review inbox locations</a>
                     <div class="auth-bar" id="authBar"></div>
                     <div class="controls-group">
                         <div class="map-style-control">
@@ -1042,6 +1043,7 @@
     <div class="modal-overlay" id="inboxModal" role="dialog" aria-modal="true" aria-labelledby="inboxTitle">
         <div class="modal inbox-modal">
             <h3 id="inboxTitle">Unlocated stories</h3>
+            <p><a href="inbox-locations.html">Open full-page location review →</a></p>
             <p class="inbox-status">These stories are saved, including their cached text, but need a map location. Any signed-in user can place them. All dates and categories are included.</p>
             <label for="inboxSearch">Search inbox</label>
             <input id="inboxSearch" type="search" placeholder="Search titles or summaries" oninput="renderInbox()">
@@ -1430,7 +1432,8 @@
 
             if (res.ok) {
                 closeModal('authModal');
-                checkSession();
+                await checkSession();
+                reviewInboxLocationFromUrl();
             } else {
                 const data = await res.json();
                 alert(data.error || 'Auth failed');
@@ -1589,6 +1592,24 @@
             document.getElementById('inboxPlacementBanner').hidden = false;
             map.getContainer().classList.add('placing-inbox');
             map.closePopup();
+        }
+
+        function reviewInboxLocationFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            const id = params.get('review_inbox');
+            if (!id || !/^\d+$/.test(id)) return;
+            const latText = params.get('lat'), lonText = params.get('lon');
+            const lat = Number(latText), lon = Number(lonText);
+            if (!latText?.trim() || !lonText?.trim() || !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return;
+            if (!inboxData.some(item => item.id == id)) { showToast('This story is no longer in the inbox.'); return; }
+            if (!currentUser) { openAuthModal(); return; }
+            startInboxPlacement(id);
+            map.flyTo([lat, lon], 12);
+            // Review links only move the view. The existing map-click and explicit
+            // confirmation flow remains the only way to save this location.
+            ['review_inbox', 'lat', 'lon'].forEach(key => params.delete(key));
+            const url = new URL(window.location); url.search = params.toString();
+            window.history.replaceState({}, '', url);
         }
 
         function cancelInboxPlacement() {
@@ -2763,8 +2784,7 @@
 
         parseUrlParams();
         initDateRange();
-        checkSession();
-        fetchArticlesFromAPI();
+        Promise.all([checkSession(), fetchArticlesFromAPI()]).then(reviewInboxLocationFromUrl);
 
         let incidentSearchDebounceTimer = null;
         let activeSearchTab = 'location';

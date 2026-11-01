@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inbox location review — GeoNews</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; background: #f1f5f9; color: #0f172a; font: 15px/1.5 system-ui, sans-serif; }
+        main { max-width: 1100px; margin: auto; padding: 20px; }
+        h1 { margin-bottom: 8px; }
+        h2 { font-size: 19px; margin: 0 0 8px; }
+        a { color: #0369a1; }
+        button, input { font: inherit; padding: 8px 12px; border: 1px solid #94a3b8; border-radius: 5px; }
+        button { background: #fff; color: #0f172a; cursor: pointer; }
+        button:disabled { cursor: default; opacity: .6; }
+        input { min-width: 0; max-width: 100%; }
+        label { display: block; font-weight: 600; }
+        .toolbar, .links, .search-row, .pager { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+        .toolbar { position: sticky; top: 0; z-index: 1; background: #f1f5f9; padding: 12px 0; border-bottom: 1px solid #cbd5e1; }
+        .toolbar label { flex: 1; min-width: 200px; }
+        #filter { width: 100%; }
+        article { background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 20px; margin: 16px 0; overflow-wrap: anywhere; }
+        .meta, .evidence { color: #475569; font-size: 13px; }
+        .guess { margin: 14px 0; padding: 12px; background: #f8fafc; border-left: 3px solid #94a3b8; }
+        .guess p { margin: 4px 0 8px; }
+        .result { padding: 10px 0; border-top: 1px solid #cbd5e1; }
+        .result a { display: block; }
+        .search-row { margin-top: 14px; }
+        .search-row input { flex: 1; }
+        .pager { justify-content: center; margin: 20px 0; }
+        [hidden] { display: none !important; }
+        @media (max-width: 500px) { main { padding: 12px; } article { padding: 12px; } }
+    </style>
+</head>
+<body>
+<main>
+    <a href="index.html">← Back to map</a>
+    <h1>Inbox location review</h1>
+    <p>Review possible locations for unlocated stories, across all dates and categories. Guesses are not verified locations.</p>
+    <p>Searches run only when requested, one at a time. Review a result on the map, then click and confirm the incident location there. Nothing is saved on this page.</p>
+    <div class="toolbar">
+        <label>Filter stories<input id="filter" type="search" placeholder="Title, summary, or author"></label>
+        <button id="reload" type="button">Reload inbox</button>
+        <button id="stop" type="button" disabled>Stop searches</button>
+    </div>
+    <p id="status" role="status">Loading inbox…</p>
+    <p id="queueStatus" role="status"></p>
+    <div id="stories"></div>
+    <nav class="pager" aria-label="Inbox pages">
+        <button id="previous" type="button">Previous</button>
+        <span id="pageLabel"></span>
+        <button id="next" type="button">Next</button>
+    </nav>
+</main>
+<script src="api/runtime-config.php"></script>
+<script>
+    const pageSize = 20;
+    let stories = [], page = 0, renderVersion = 0, queueVersion = 0, pending = 0;
+    let queue = Promise.resolve(), lastSearch = 0, activeSearch = null;
+    const suggestions = new Map(), searches = new Map(), requestedQueries = new Map(), customQueries = new Map();
+    const queryKey = query => query.trim().toLocaleLowerCase();
+    const byId = id => document.getElementById(id);
+    function element(tag, text, className = '') {
+        const node = document.createElement(tag); node.textContent = text; node.className = className; return node;
+    }
+    function link(text, href) {
+        const node = element('a', text); node.href = href; node.target = '_blank'; node.rel = 'noopener'; return node;
+    }
+    async function readJson(response) {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || `Request failed (${response.status}).`);
+        return data;
+    }
+    function updateQueue() {
+        byId('stop').disabled = pending === 0;
+        byId('queueStatus').textContent = pending ? `${pending} location search(es) active or queued.` : '';
+    }
+    function stopSearches() {
+        queueVersion++; activeSearch?.abort();
+    }
+    function searchPlace(query) {
+        const key = queryKey(query);
+        if (searches.has(key)) return searches.get(key);
+        const version = queueVersion;
+        pending++; updateQueue();
+        const job = queue.then(async () => {
+            if (version !== queueVersion) throw new Error('Search cancelled.');
+            await new Promise(resolve => setTimeout(resolve, Math.max(0, 1100 - (Date.now() - lastSearch))));
+            if (version !== queueVersion) throw new Error('Search cancelled.');
+            const base = (window.GEONEWS_CONFIG?.nominatimUrl || 'https://nominatim.openstreetmap.org').replace(/\/$/, '');
+            const url = new URL(base + '/search');
+            url.searchParams.set('q', query); url.searchParams.set('format', 'json'); url.searchParams.set('limit', '5');
+            activeSearch = new AbortController(); lastSearch = Date.now();
+            const timeout = setTimeout(() => activeSearch?.abort(), 20000);
+            try {
+                const response = await fetch(url, { signal: activeSearch.signal });
+                if (response.status === 429 || response.status === 503) {
+                    queueVersion++;
+                    throw new Error('Location service is busy. Remaining searches stopped; try again later.');
+                }
+                const matches = await readJson(response);
+                if (!Array.isArray(matches)) throw new Error('Invalid location search response.');
+                return matches;
+            } finally { clearTimeout(timeout); activeSearch = null; }
+        });
+        const result = job.catch(error => { searches.delete(key); throw error; }).finally(() => { pending--; updateQueue(); });
+        queue = result.catch(() => {});
+        searches.set(key, result);
+        return result;
+    }
+    async function showResults(story, query, container, button) {
+        if (!requestedQueries.has(story.id)) requestedQueries.set(story.id, new Set());
+        requestedQueries.get(story.id).add(queryKey(query));
+        button.disabled = true; container.replaceChildren(element('p', 'Searching or queued…', 'meta'));
+        try {
+            const matches = await searchPlace(query);
+            container.replaceChildren();
+            let shown = 0;
+            for (const match of matches) {
+                const lat = Number(match.lat), lon = Number(match.lon);
+                if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) continue;
+                shown++;
+                const result = element('div', '', 'result');
+                result.append(element('div', match.display_name || query));
+                result.append(element('div', `${lat.toFixed(5)}, ${lon.toFixed(5)}`, 'meta'));
+                const url = new URL('index.html', window.location.href);
+                url.search = new URLSearchParams({ review_inbox: story.id, lat, lon }).toString();
+                result.append(link('Review and place on map ↗', url)); container.append(result);
+            }
+            if (!shown) container.append(element('p', 'No matches. Try another spelling or a more specific place.'));
+        } catch (error) { container.replaceChildren(element('p', error.name === 'AbortError' ? 'Search cancelled.' : error.message)); }
+        finally { button.disabled = false; }
+    }
+    function getSuggestions(story) {
+        const key = JSON.stringify([story.id, story.title, story.summary]);
+        if (!suggestions.has(key)) {
+            const request = fetch('api/location-suggestions.php', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: story.title, summary: story.summary || '' })
+            }).then(readJson).then(data => data.location_suggestions).catch(error => { suggestions.delete(key); throw error; });
+            suggestions.set(key, request);
+        }
+        return suggestions.get(key);
+    }
+    function render() {
+        const version = ++renderVersion;
+        const filter = byId('filter').value.trim().toLocaleLowerCase();
+        const filtered = stories.filter(story => `${story.title} ${story.summary || ''} ${story.author || ''}`.toLocaleLowerCase().includes(filter));
+        const pages = Math.max(1, Math.ceil(filtered.length / pageSize)); page = Math.min(page, pages - 1);
+        byId('status').textContent = `${filtered.length} of ${stories.length} unlocated stories. Suggestions are generated from saved text, not historical watcher search logs.`;
+        byId('pageLabel').textContent = `Page ${page + 1} of ${pages}`;
+        byId('previous').disabled = page === 0; byId('next').disabled = page + 1 >= pages;
+        byId('stories').replaceChildren();
+        for (const story of filtered.slice(page * pageSize, (page + 1) * pageSize)) {
+            const card = element('article', ''); card.dataset.articleId = story.id;
+            card.append(element('h2', `${story.emoji || ''} ${story.title}`));
+            card.append(element('p', `${story.published_at} · Oslo · ${story.author || 'User'} · #${story.id}`, 'meta'));
+            card.append(element('p', story.summary || ''));
+            const links = element('div', '', 'links');
+            if (/^https?:\/\//i.test(story.url)) links.append(link('Original article ↗', story.url));
+            links.append(link('Cached article ↗', `cached-article.php?id=${encodeURIComponent(story.id)}`));
+            links.append(link('Place manually on map ↗', `index.html?id=${encodeURIComponent(story.id)}`)); card.append(links);
+            const guesses = element('div', 'Finding place guesses…', 'guesses'); card.append(guesses);
+            const custom = element('form', '', 'search-row');
+            const input = document.createElement('input'); input.type = 'search'; input.required = true; input.maxLength = 200;
+            input.placeholder = 'Try another place or address'; input.setAttribute('aria-label', `Custom location search for story ${story.id}`);
+            const search = element('button', 'Search'); search.type = 'submit';
+            const customResults = element('div', '');
+            const customRows = new Map();
+            function customSearch(query, run) {
+                const key = queryKey(query);
+                if (!customRows.has(key)) {
+                    const group = element('div', '', 'guess'); group.append(element('strong', `Custom search: ${query}`));
+                    const retry = element('button', 'Search'); retry.type = 'button';
+                    const results = element('div', '');
+                    retry.onclick = () => showResults(story, query, results, retry);
+                    group.append(retry, results); customResults.append(group); customRows.set(key, { results, retry });
+                }
+                const { results, retry } = customRows.get(key);
+                if (run || searches.has(key)) showResults(story, query, results, retry);
+            }
+            custom.onsubmit = event => {
+                event.preventDefault(); const query = input.value.trim(); if (!query) return;
+                if (!customQueries.has(story.id)) customQueries.set(story.id, new Set());
+                customQueries.get(story.id).add(query); customSearch(query, true);
+            };
+            for (const query of customQueries.get(story.id) || []) customSearch(query, false);
+            custom.append(input, search); card.append(custom, customResults); byId('stories').append(card);
+            getSuggestions(story).then(items => {
+                if (version !== renderVersion) return;
+                guesses.replaceChildren();
+                if (!items.length) { guesses.append(element('p', 'No guesses found. Read the article or try a custom search.', 'meta')); return; }
+                const all = element('button', 'Search all guesses for this story'); all.type = 'button'; guesses.append(all);
+                const buttons = [];
+                for (const suggestion of items) {
+                    const row = element('div', '', 'guess');
+                    row.append(element('strong', suggestion.place));
+                    row.append(element('p', `${suggestion.source === 'title' ? 'Headline' : 'Summary'}: “${suggestion.evidence}”`, 'evidence'));
+                    if (suggestion.query !== suggestion.place) row.append(element('p', `Search query: ${suggestion.query}`, 'meta'));
+                    const button = element('button', `Search ${suggestion.place}`); button.type = 'button';
+                    const results = element('div', ''); button.onclick = () => showResults(story, suggestion.query, results, button);
+                    if (requestedQueries.get(story.id)?.has(queryKey(suggestion.query)) && searches.has(queryKey(suggestion.query))) {
+                        showResults(story, suggestion.query, results, button);
+                    }
+                    buttons.push(button); row.append(button, results); guesses.append(row);
+                }
+                all.onclick = () => { buttons.filter(button => !button.disabled).forEach(button => button.click()); };
+            }).catch(error => { if (version === renderVersion) guesses.replaceChildren(element('p', error.message)); });
+        }
+    }
+    async function loadInbox() {
+        byId('reload').disabled = true; byId('status').textContent = 'Loading inbox…';
+        stopSearches();
+        try {
+            const data = await readJson(await fetch('api/articles.php?location=inbox', { cache: 'no-store' }));
+            if (!Array.isArray(data)) throw new Error('Invalid inbox response.');
+            stories = data; render();
+        } catch (error) { byId('status').textContent = error.message; }
+        finally { byId('reload').disabled = false; }
+    }
+    byId('filter').oninput = () => { page = 0; render(); };
+    byId('previous').onclick = () => { page--; render(); window.scrollTo(0, 0); };
+    byId('next').onclick = () => { page++; render(); window.scrollTo(0, 0); };
+    byId('reload').onclick = loadInbox; byId('stop').onclick = stopSearches;
+    loadInbox();
+</script>
+</body>
+</html>
