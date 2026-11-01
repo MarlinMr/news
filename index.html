@@ -2259,7 +2259,7 @@
             };
             card.innerHTML = `
                 <div class="feed-item-header">
-                    <span>${escapeComment(item.emoji)} ${pubDate.toLocaleDateString(undefined, { timeZone: APP_TIMEZONE })}</span>
+                    <span>${escapeComment(item.emoji)} ${pubDate.toLocaleDateString(undefined, { timeZone: APP_TIMEZONE })} ${pubDate.toLocaleTimeString(undefined, { timeZone: APP_TIMEZONE, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })}</span>
                     <span>by ${escapeComment(item.author || 'User')}</span>
                 </div>
                 <div class="feed-item-title">${escapeComment(item.title)}</div>
