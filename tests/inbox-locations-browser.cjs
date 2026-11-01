@@ -10,7 +10,8 @@ const base = process.env.BASE_URL || 'http://127.0.0.1:8087';
         for (const width of [1280, 390]) {
             const page = await browser.newPage({ viewport: { width, height: 900 } });
             const errors = [], searches = [];
-            let writes = 0;
+            let writes = 0, signedIn = false, placementStatus = 200;
+            const placements = [];
             page.on('pageerror', error => errors.push(error.message));
             const stories = Array.from({ length: 21 }, (_, index) => ({
                 id: index + 1, title: index === 0 ? 'Røykutvikling på Majorstuen i Oslo' : index === 1 ? 'Protests in London and Paris' : `Story ${index + 1}`,
@@ -19,8 +20,17 @@ const base = process.env.BASE_URL || 'http://127.0.0.1:8087';
             }));
             await page.route('**/*', async route => {
                 const url = new URL(route.request().url());
+                if (url.pathname.endsWith('/api/auth.php')) {
+                    if (url.searchParams.get('action') === 'login') {
+                        signedIn = true; return route.fulfill({ json: { message: 'Logged in' } });
+                    }
+                    return route.fulfill({ json: { authenticated: signedIn, user: { id: 4, username: 'tester', role: 'user' } } });
+                }
                 if (url.pathname.endsWith('/api/articles.php')) {
-                    if (route.request().method() !== 'GET') writes++;
+                    if (route.request().method() !== 'GET') {
+                        writes++; placements.push(route.request().postDataJSON());
+                        return route.fulfill({ status: placementStatus, json: placementStatus === 200 ? { message: 'Placed' } : { error: placementStatus === 401 ? 'Please sign in' : 'Already placed by another user' } });
+                    }
                     return route.fulfill({ json: stories });
                 }
                 if (url.hostname === 'nominatim.openstreetmap.org') {
@@ -67,8 +77,36 @@ const base = process.env.BASE_URL || 'http://127.0.0.1:8087';
             assert.equal(await page.locator('article').count(), 0);
             assert.equal(writes, 0);
             assert.deepEqual(errors, []);
+            await page.locator('#filter').fill('');
+            await page.waitForFunction(() => document.querySelectorAll('article:first-child .result').length === 8);
+            await page.locator('article').first().getByRole('button', { name: 'Accept location', exact: true }).first().click();
+            assert.equal(writes, 0, 'Signed-out users cannot save');
+            await page.locator('#username').fill('tester'); await page.locator('#password').fill('test-password');
+            await page.locator('#signIn').click();
+            await page.waitForFunction(() => document.getElementById('authStatus').textContent.includes('Signed in as tester'));
+            assert.equal(writes, 0, 'Signing in must not implicitly accept a location');
+            await page.locator('article').first().getByRole('button', { name: 'Accept location', exact: true }).first().evaluate(button => { button.click(); button.click(); });
+            await page.waitForFunction(() => document.getElementById('saveStatus').textContent.startsWith('Placed'));
+            assert.equal(writes, 1, 'Double clicks do not issue duplicate writes');
+            assert.deepEqual(placements[0], { action: 'place_inbox', id: 1, latitude: 59.92927, longitude: 10.71557 });
+            assert.equal(await page.locator('article[data-article-id="1"]').count(), 0);
+            const second = page.locator('article[data-article-id="2"]');
+            await second.getByRole('button', { name: 'Search London', exact: true }).click();
+            await second.getByRole('button', { name: 'Accept location', exact: true }).first().waitFor();
+            placementStatus = 401;
+            await second.getByRole('button', { name: 'Accept location', exact: true }).first().click();
+            await page.waitForFunction(() => document.getElementById('signInPanel').open && !document.getElementById('signInPanel').hidden);
+            assert.equal(await second.count(), 1, 'Expired sessions keep the story for retry');
+            await page.locator('#password').fill('test-password'); await page.locator('#signIn').click();
+            await page.waitForFunction(() => document.getElementById('authStatus').textContent.includes('Signed in as tester'));
+            placementStatus = 409;
+            await second.getByRole('button', { name: 'Accept location', exact: true }).first().click();
+            await page.waitForFunction(() => document.getElementById('saveStatus').textContent.includes('Already placed'));
+            assert.equal(await page.locator('article[data-article-id="2"]').count(), 0);
+            assert.equal(writes, 3);
+            assert.deepEqual(errors, []);
             await page.close();
-            console.log(`Inbox review passed: ${width}px, pagination/filtering, guesses, rate limiting, cache, cancellation, no writes`);
+            console.log(`Inbox review passed: ${width}px, searches, direct acceptance, login/session expiry, double-click and conflict handling`);
         }
     } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

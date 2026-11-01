@@ -38,7 +38,16 @@
     <a href="index.html">← Back to map</a>
     <h1>Inbox location review</h1>
     <p>Review possible locations for unlocated stories, across all dates and categories. Guesses are not verified locations.</p>
-    <p>Searches run only when requested, one at a time. Review a result on the map, then click and confirm the incident location there. Nothing is saved on this page.</p>
+    <p>Searches run only when requested, one at a time. Choose <strong>Accept location</strong> to save a result directly. Viewing it on the map is optional.</p>
+    <p id="authStatus" role="status"></p>
+    <details id="signInPanel">
+        <summary>Sign in to accept locations</summary>
+        <form id="signInForm" class="search-row">
+            <label>Username or email<input id="username" autocomplete="username" required></label>
+            <label>Password<input id="password" type="password" autocomplete="current-password" required></label>
+            <button id="signIn" type="submit">Sign in</button>
+        </form>
+    </details>
     <div class="toolbar">
         <label>Filter stories<input id="filter" type="search" placeholder="Title, summary, or author"></label>
         <button id="reload" type="button">Reload inbox</button>
@@ -46,6 +55,7 @@
     </div>
     <p id="status" role="status">Loading inbox…</p>
     <p id="queueStatus" role="status"></p>
+    <p id="saveStatus" role="status"></p>
     <div id="stories"></div>
     <nav class="pager" aria-label="Inbox pages">
         <button id="previous" type="button">Previous</button>
@@ -59,6 +69,8 @@
     let stories = [], page = 0, renderVersion = 0, queueVersion = 0, pending = 0;
     let queue = Promise.resolve(), lastSearch = 0, activeSearch = null;
     const suggestions = new Map(), searches = new Map(), requestedQueries = new Map(), customQueries = new Map();
+    const savingStories = new Set(), placedStories = new Set();
+    let currentUser = null;
     const queryKey = query => query.trim().toLocaleLowerCase();
     const byId = id => document.getElementById(id);
     function element(tag, text, className = '') {
@@ -71,6 +83,59 @@
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || `Request failed (${response.status}).`);
         return data;
+    }
+    function setUser(user) {
+        currentUser = user;
+        byId('authStatus').textContent = user ? `Signed in as ${user.username}.` : 'You can search without signing in. Sign in to accept a location.';
+        byId('signInPanel').hidden = !!user;
+    }
+    async function checkSession() {
+        try {
+            const data = await readJson(await fetch('api/auth.php?action=me', { cache: 'no-store' }));
+            setUser(data.authenticated ? data.user : null);
+        } catch (error) { setUser(null); byId('authStatus').textContent = error.message; }
+    }
+    byId('signInForm').onsubmit = async event => {
+        event.preventDefault(); byId('signIn').disabled = true;
+        try {
+            await readJson(await fetch('api/auth.php?action=login', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username_or_email: byId('username').value, password: byId('password').value })
+            }));
+            byId('password').value = ''; await checkSession();
+        } catch (error) { byId('authStatus').textContent = error.message; }
+        finally { byId('signIn').disabled = false; }
+    };
+    async function acceptLocation(story, latitude, longitude, name, feedback) {
+        if (savingStories.has(story.id) || placedStories.has(story.id)) return;
+        if (!currentUser) {
+            byId('signInPanel').open = true; byId('username').focus();
+            feedback.textContent = 'Sign in above, then click Accept location again.'; return;
+        }
+        savingStories.add(story.id);
+        document.querySelectorAll('button[data-accept-id]').forEach(button => {
+            if (button.dataset.acceptId === String(story.id)) button.disabled = true;
+        });
+        feedback.textContent = 'Saving location…';
+        try {
+            const response = await fetch('api/articles.php', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'place_inbox', id: story.id, latitude, longitude })
+            });
+            if (response.status === 401) { setUser(null); byId('signInPanel').open = true; byId('username').focus(); }
+            const data = await response.json();
+            if (response.ok || response.status === 409 || response.status === 404) {
+                placedStories.add(story.id); stories = stories.filter(item => item.id !== story.id);
+                byId('saveStatus').textContent = response.ok ? `Placed “${story.title}” at ${name}.` : (data.error || 'This story is no longer available for placement.');
+                render();
+            } else { throw new Error(data.error || 'Could not save the location.'); }
+        } catch (error) { feedback.textContent = error.message; }
+        finally {
+            savingStories.delete(story.id);
+            document.querySelectorAll('button[data-accept-id]').forEach(button => {
+                if (button.dataset.acceptId === String(story.id)) button.disabled = false;
+            });
+        }
     }
     function updateQueue() {
         byId('stop').disabled = pending === 0;
@@ -118,6 +183,7 @@
             container.replaceChildren();
             let shown = 0;
             for (const match of matches) {
+                if (match.lat == null || match.lon == null || !String(match.lat).trim() || !String(match.lon).trim()) continue;
                 const lat = Number(match.lat), lon = Number(match.lon);
                 if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) continue;
                 shown++;
@@ -126,7 +192,11 @@
                 result.append(element('div', `${lat.toFixed(5)}, ${lon.toFixed(5)}`, 'meta'));
                 const url = new URL('index.html', window.location.href);
                 url.search = new URLSearchParams({ review_inbox: story.id, lat, lon }).toString();
-                result.append(link('Review and place on map ↗', url)); container.append(result);
+                const accept = element('button', 'Accept location'); accept.type = 'button'; accept.dataset.acceptId = story.id;
+                accept.disabled = savingStories.has(story.id);
+                const feedback = element('p', '', 'meta'); feedback.setAttribute('role', 'status');
+                accept.onclick = () => acceptLocation(story, lat, lon, match.display_name || query, feedback);
+                result.append(accept, link('Review and place on map ↗', url), feedback); container.append(result);
             }
             if (!shown) container.append(element('p', 'No matches. Try another spelling or a more specific place.'));
         } catch (error) { container.replaceChildren(element('p', error.name === 'AbortError' ? 'Search cancelled.' : error.message)); }
@@ -215,7 +285,7 @@
         try {
             const data = await readJson(await fetch('api/articles.php?location=inbox', { cache: 'no-store' }));
             if (!Array.isArray(data)) throw new Error('Invalid inbox response.');
-            stories = data; render();
+            stories = data.filter(story => !placedStories.has(story.id)); render();
         } catch (error) { byId('status').textContent = error.message; }
         finally { byId('reload').disabled = false; }
     }
@@ -223,7 +293,7 @@
     byId('previous').onclick = () => { page--; render(); window.scrollTo(0, 0); };
     byId('next').onclick = () => { page++; render(); window.scrollTo(0, 0); };
     byId('reload').onclick = loadInbox; byId('stop').onclick = stopSearches;
-    loadInbox();
+    checkSession(); loadInbox();
 </script>
 </body>
 </html>
